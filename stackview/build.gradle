@@ -1,10 +1,6 @@
 apply plugin: 'com.android.library'
-
-ext {
-    PUBLISH_GROUP_ID = 'net.brach.android'
-    PUBLISH_ARTIFACT_ID = 'stackview'
-    PUBLISH_VERSION = '1.0.0'
-}
+apply plugin: 'com.github.dcendents.android-maven'
+apply plugin: 'com.jfrog.bintray'
 
 android {
     compileSdkVersion 25
@@ -29,4 +25,82 @@ dependencies {
     testCompile 'junit:junit:4.12'
 }
 
-apply from: 'https://raw.githubusercontent.com/blundell/release-android-library/master/android-release-aar.gradle'
+task sourcesJar(type: Jar) {
+    from android.sourceSets.main.java.srcDirs
+    classifier = 'sources'
+}
+
+task javadoc(type: Javadoc) {
+    source = android.sourceSets.main.java.srcDirs
+    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives javadocJar
+    archives sourcesJar
+}
+
+group = 'net.brach.android'
+version = '1.0.0'
+
+install {
+    repositories.mavenInstaller {
+        pom.project {
+            name 'Android StackView'
+            description ''
+            url 'https://github.com/brachior/android-stackview'
+            inceptionYear '2017'
+
+            packaging 'aar'
+            groupId 'net.brach.android'
+            artifactId 'stackview'
+            version '1.0.0'
+
+            licenses {
+                license {
+                    name 'GNU General Public Licence (GPL)'
+                    url 'https://www.gnu.org/licenses/gpl.html'
+                }
+            }
+            scm {
+                connection 'https://github.com/brachior/android-stackview.git'
+                url 'https://github.com/brachior/android-stackview'
+
+            }
+            developers {
+                developer {
+                    id = 'brach'
+                    name 'Brachior'
+                }
+            }
+        }
+    }
+}
+
+Properties bintrayProperties = new Properties()
+bintrayProperties.load(project.rootProject.file('bintray.properties').newDataInputStream())
+
+bintray {
+    user = bintrayProperties.getProperty('user')
+    key = bintrayProperties.get('key')
+    configurations = ['archives']
+    pkg {
+        repo = 'android'
+        name = 'stackview'
+        userOrg = 'brachior'
+        licenses = ['GPL-3.0']
+        vcsUrl = 'https://github.com/brachior/android-stackview'
+        publish = true
+        version {
+            name = '1.0.0'
+            desc = 'Android StackView'
+            released = new Date()
+            vcsTag = 'v1.0.0'
+        }
+    }
+}
