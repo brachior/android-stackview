@@ -1,5 +1,11 @@
 apply plugin: 'com.android.library'
 
+ext {
+    PUBLISH_GROUP_ID = 'net.brach.android'
+    PUBLISH_ARTIFACT_ID = 'stackview'
+    PUBLISH_VERSION = '1.0.0'
+}
+
 android {
     compileSdkVersion 25
     buildToolsVersion "25.0.1"
@@ -22,3 +28,5 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     testCompile 'junit:junit:4.12'
 }
+
+apply from: 'https://raw.githubusercontent.com/blundell/release-android-library/master/android-release-aar.gradle'

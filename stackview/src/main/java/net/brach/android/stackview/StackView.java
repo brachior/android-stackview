@@ -128,7 +128,7 @@ public class StackView extends FrameLayout {
         }
 
         /**
-         * Get the item at the position {@see Position}.
+         * Get the item at the position.
          *
          * @param position position of the item.
          * @return the item at position, null if no item available at this position.
@@ -145,7 +145,7 @@ public class StackView extends FrameLayout {
         }
 
         /**
-         * Create/Inflate the default view used by the methods {@see createAndBindView}.
+         * Create/Inflate the default view used by the method 'createAndBindView'.
          *
          * @return the default view to use.
          */
@@ -161,10 +161,10 @@ public class StackView extends FrameLayout {
 
         /**
          * Create the view and fill it with the item.
-         * Use by default the methods {@see createDefaultView} and {@see bindDefaultView}.
+         * Use by default the methods 'createDefaultView' and 'bindDefaultView'.
          * If items use different layouts, you can override this method.
          *
-         * @param position {@see FIRST} or {@see SECOND}
+         * @param position 'FIRST' or 'SECOND'
          *
          * @return the view corresponding to the item.
          */
