@@ -198,6 +198,15 @@ public class StackView extends FrameLayout {
         /**
          * Notify any registered observers that the data set has changed.
          */
+        public void notifyDataSetChangedOnMainThread() {
+            if (listener != null) {
+                listener.notifyDataSetChangedOnMainThread();
+            }
+        }
+
+        /**
+         * Notify any registered observers that the data set has changed.
+         */
         public void notifyDataSetChanged() {
             if (listener != null) {
                 listener.notifyDataSetChanged();

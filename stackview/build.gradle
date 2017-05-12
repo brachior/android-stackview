@@ -10,7 +10,7 @@ android {
         minSdkVersion 14
         targetSdkVersion 25
         versionCode 1
-        versionName "1.0.1"
+        versionName "1.0.2"
     }
     buildTypes {
         release {
@@ -46,7 +46,7 @@ artifacts {
 }
 
 group = 'net.brach.android'
-version = '1.0.1'
+version = '1.0.2'
 
 install {
     repositories.mavenInstaller {
@@ -59,7 +59,7 @@ install {
             packaging 'aar'
             groupId 'net.brach.android'
             artifactId 'stackview'
-            version '1.0.1'
+            version '1.0.2'
 
             licenses {
                 license {
@@ -97,7 +97,7 @@ bintray {
         vcsUrl = 'https://github.com/brachior/android-stackview'
         publish = true
         version {
-            name = '1.0.1'
+            name = '1.0.2'
             desc = 'Android StackView'
             released = new Date()
             vcsTag = 'v1.0.0'
