@@ -7,6 +7,8 @@ import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
@@ -209,6 +211,15 @@ public class StackView extends FrameLayout {
         void register(StackView listener) {
             this.listener = listener;
         }
+    }
+
+    void notifyDataSetChangedOnMainThread() {
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                notifyDataSetChanged();
+            }
+        });
     }
 
     @SuppressWarnings("unchecked")
