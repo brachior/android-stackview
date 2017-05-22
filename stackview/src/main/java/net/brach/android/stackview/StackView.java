@@ -277,7 +277,7 @@ public class StackView extends FrameLayout {
     private void fillBack() {
         final View view = adapter.createAndBindView(Adapter.Position.SECOND);
         tmp.removeAllViews();
-        tmp.addView(view);
+        tmp.addView(view, tmp.getLayoutParams());
         addOnGlobalLayoutListener(view, new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
             public void onGlobalLayout() {
@@ -296,7 +296,7 @@ public class StackView extends FrameLayout {
     private void fillFront() {
         frontContent = adapter.createAndBindView(Adapter.Position.FIRST);
         front.removeAllViews();
-        front.addView(frontContent);
+        front.addView(frontContent, front.getLayoutParams());
         requestLayout();
 
         frontContent.setOnTouchListener(new OnTouchListener() {
