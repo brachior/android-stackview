@@ -283,12 +283,14 @@ public class StackView extends FrameLayout {
             public void onGlobalLayout() {
                 removeOnGlobalLayoutListener(view, this);
 
-                back.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight()));
-                Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(bitmap);
-                view.draw(canvas);
-                back.setImageBitmap(bitmap);
-                back.requestLayout();
+                if (view.getWidth() != 0 && view.getHeight() != 0) {
+                    back.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight()));
+                    Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(bitmap);
+                    view.draw(canvas);
+                    back.setImageBitmap(bitmap);
+                    back.requestLayout();
+                }
             }
         });
     }
