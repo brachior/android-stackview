@@ -9,6 +9,8 @@ import android.graphics.Canvas;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.support.v4.graphics.drawable.RoundedBitmapDrawable;
+import android.support.v4.graphics.drawable.RoundedBitmapDrawableFactory;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
@@ -23,11 +25,15 @@ import android.widget.LinearLayout;
 
 public class StackView extends FrameLayout {
     private final int padding;
+    private final int margin;
+    private final int radius;
     private final int animDuration;
     private final int swipe;
     private final int[] initPadding;
 
-    private final ImageView back;
+    private final LinearLayout back;
+    private final ImageView backContent;
+
     private final LinearLayout empty;
     private final LinearLayout front;
     private final LinearLayout tmp;
@@ -53,7 +59,9 @@ public class StackView extends FrameLayout {
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.StackView, 0, 0);
         swipe = (int) a.getDimension(R.styleable.StackView_swipe, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 67, displayMetrics));
+        margin = (int) a.getDimension(R.styleable.StackView_margin, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, displayMetrics));
         padding = (int) a.getDimension(R.styleable.StackView_padding, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10, displayMetrics));
+        radius = (int) a.getDimension(R.styleable.StackView_radius, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0, displayMetrics));
         animDuration = a.getInteger(R.styleable.StackView_animation_duration, 200);
         int layout = a.getResourceId(R.styleable.StackView_preview_layout, -1);
         a.recycle();
@@ -64,7 +72,9 @@ public class StackView extends FrameLayout {
 
         tmp = new LinearLayout(context);
         tmp.setOrientation(LinearLayout.HORIZONTAL);
-        tmp.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LayoutParams tmpParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        tmpParams.setMargins(margin, margin, margin, margin);
+        tmp.setLayoutParams(tmpParams);
         tmp.setVisibility(INVISIBLE);
         addView(tmp);
 
@@ -74,14 +84,22 @@ public class StackView extends FrameLayout {
         empty.setVisibility(GONE);
         addView(empty);
 
-        back = new ImageView(context);
+        backContent = new ImageView(context);
+        backContent.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        back = new LinearLayout(context);
+        back.setOrientation(LinearLayout.HORIZONTAL);
+        LayoutParams backParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        backParams.setMargins(margin, margin, margin, margin);
+        back.setLayoutParams(backParams);
         back.setPadding(padding, padding, padding, padding);
-        back.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        back.addView(backContent);
         addView(back);
 
         front = new LinearLayout(context);
         front.setOrientation(LinearLayout.HORIZONTAL);
-        front.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LayoutParams frontParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        front.setLayoutParams(frontParams);
         addView(front);
 
         if (isInEditMode() && layout != -1) {
@@ -95,10 +113,9 @@ public class StackView extends FrameLayout {
 
         switch (adapter.getItemCount()) {
             case 0:
-                View view = adapter.createAndBindEmptyView();
+                View view = adapter.createAndBindEmptyView(empty);
                 if (view != null) {
                     empty.setVisibility(VISIBLE);
-                    empty.addView(view);
                 }
                 break;
             default:
@@ -116,7 +133,7 @@ public class StackView extends FrameLayout {
         requestLayout();
     }
 
-    public static abstract class Adapter<Item> {
+    public static abstract class Adapter {
         private StackView listener;
 
         public enum Position {
@@ -130,51 +147,47 @@ public class StackView extends FrameLayout {
         }
 
         /**
-         * Get the item at the position.
-         *
-         * @param position position of the item.
-         * @return the item at position, null if no item available at this position.
-         */
-        public abstract Item get(Position position);
-
-        /**
          * Create/Inflate a view used if no item available.
          *
          * @return the view to use.
          */
-        public View createAndBindEmptyView() {
+        public View createAndBindEmptyView(ViewGroup parent) {
             return null;
         }
 
         /**
          * Create/Inflate the default view used by the method 'createAndBindView'.
          *
+         * @param parent container
+         * @param position 'FIRST' or 'SECOND'
+         *
          * @return the default view to use.
          */
-        public abstract View createDefaultView();
+        public abstract View onCreateView(ViewGroup parent, Position position);
 
         /**
          * Fill view with the item.
          *
          * @param view view to fill
-         * @param item item use to fill view
+         * @param position 'FIRST' or 'SECOND'
          */
-        public abstract void bindDefaultView(View view, Item item);
+        public abstract void onBindView(View view, Position position);
 
         /**
          * Create the view and fill it with the item.
-         * Use by default the methods 'createDefaultView' and 'bindDefaultView'.
-         * If items use different layouts, you can override this method.
+         * Use by default the methods 'onCreateView' and 'onBindView'.
          *
+         * @param parent container
          * @param position 'FIRST' or 'SECOND'
          *
          * @return the view corresponding to the item.
          */
-        public View createAndBindView(Position position) {
-            Item item = get(position);
-            if (item != null) {
-                View view = createDefaultView();
-                bindDefaultView(view, item);
+        public View createAndBindView(ViewGroup parent, Position position) {
+            if (getItemCount() > 0) {
+                parent.removeAllViews();
+                View view = onCreateView(parent, position);
+                parent.addView(view, -1);
+                onBindView(view, position);
                 return view;
             }
             return null;
@@ -239,18 +252,17 @@ public class StackView extends FrameLayout {
                     frontContent.setVisibility(GONE);
                     frontContent.requestLayout();
                 }
-                if (back.getDrawable() != null) {
+                if (backContent.getDrawable() != null) {
                     back.setVisibility(GONE);
                     back.requestLayout();
                 }
-                View view = adapter.createAndBindEmptyView();
+                View view = adapter.createAndBindEmptyView(empty);
                 if (view != null) {
                     empty.setVisibility(VISIBLE);
-                    empty.addView(view);
                 }
                 break;
             default:
-                if (back.getDrawable() != null) {
+                if (backContent.getDrawable() != null) {
                     fillBack();
                     back.setVisibility(VISIBLE);
                     back.requestLayout();
@@ -260,7 +272,7 @@ public class StackView extends FrameLayout {
             case 1:
                 empty.setVisibility(GONE);
                 if (frontContent != null) {
-                    adapter.bindDefaultView(frontContent, adapter.get(Adapter.Position.FIRST));
+                    adapter.onBindView(frontContent, Adapter.Position.FIRST);
                     frontContent.setVisibility(VISIBLE);
                     frontContent.requestLayout();
                 } else {
@@ -275,20 +287,22 @@ public class StackView extends FrameLayout {
     /*************/
 
     private void fillBack() {
-        final View view = adapter.createAndBindView(Adapter.Position.SECOND);
-        tmp.removeAllViews();
-        tmp.addView(view, tmp.getLayoutParams());
+        final View view = adapter.createAndBindView(tmp, Adapter.Position.SECOND);
         addOnGlobalLayoutListener(view, new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
             public void onGlobalLayout() {
                 removeOnGlobalLayoutListener(view, this);
 
                 if (view.getWidth() != 0 && view.getHeight() != 0) {
-                    back.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight()));
+                    backContent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight()));
                     Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(bitmap);
                     view.draw(canvas);
-                    back.setImageBitmap(bitmap);
+
+                    RoundedBitmapDrawable dr = RoundedBitmapDrawableFactory.create(getResources(), bitmap);
+                    dr.setCornerRadius(radius * 4);
+
+                    backContent.setImageDrawable(dr);
                     back.requestLayout();
                 }
             }
@@ -296,9 +310,8 @@ public class StackView extends FrameLayout {
     }
 
     private void fillFront() {
-        frontContent = adapter.createAndBindView(Adapter.Position.FIRST);
-        front.removeAllViews();
-        front.addView(frontContent, front.getLayoutParams());
+        frontContent = adapter.createAndBindView(front, Adapter.Position.FIRST);
+        ((MarginLayoutParams) frontContent.getLayoutParams()).setMargins(margin, margin, margin, margin);
         requestLayout();
 
         frontContent.setOnTouchListener(new OnTouchListener() {
@@ -309,7 +322,7 @@ public class StackView extends FrameLayout {
                         dX = frontContent.getX() - event.getRawX();
                         dY = frontContent.getY() - event.getRawY();
 
-                        if (back.getDrawable() != null) {
+                        if (backContent.getDrawable() != null) {
                             ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(500);
                             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                                 @Override
@@ -330,8 +343,12 @@ public class StackView extends FrameLayout {
                         } else if (delta < -swipe) {
                             remove(initX - frontContent.getWidth(), event.getRawY() + dY);
                         } else {
-                            frontContent.animate().x(initPadding[0] + initX).y(initPadding[1] + initY).setDuration(animDuration / 2).start();
-                            if (back.getDrawable() != null) {
+                            frontContent.animate()
+                                    .x(initPadding[0] + initX + margin)
+                                    .y(initPadding[1] + initY + margin)
+                                    .setDuration(animDuration / 2)
+                                    .start();
+                            if (backContent.getDrawable() != null) {
                                 ValueAnimator animator = ValueAnimator.ofInt(0, padding).setDuration(animDuration);
                                 animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                                     @Override
@@ -370,27 +387,29 @@ public class StackView extends FrameLayout {
                     done = true;
 
                     adapter.remove();
-                    if (adapter.get(Adapter.Position.FIRST) != null) {
-                        fillFront();
-                        frontContent.setX(initPadding[0] + initX);
-                        frontContent.setY(initPadding[1] + initY);
+                    back.setVisibility(GONE);
+                    switch (adapter.getItemCount()) {
+                        case 0: {
+                            frontContent.setVisibility(GONE);
+                            frontContent.setX(initPadding[0] + initX + margin);
+                            frontContent.setY(initPadding[1] + initY + margin);
 
-                        if (adapter.get(Adapter.Position.SECOND) != null) {
+                            View view = adapter.createAndBindEmptyView(empty);
+                            if (view != null) {
+                                empty.setVisibility(VISIBLE);
+                            }
+                            break;
+                        }
+                        default: {
+                            back.setVisibility(VISIBLE);
                             fillBack();
                             back.setPadding(padding, padding, padding, padding);
-                        } else {
-                            back.setVisibility(GONE);
                         }
-                        back.requestLayout();
-                    } else {
-                        frontContent.setVisibility(GONE);
-                        frontContent.setX(initPadding[0] + initX);
-                        frontContent.setY(initPadding[1] + initY);
-
-                        View view = adapter.createAndBindEmptyView();
-                        if (view != null) {
-                            empty.setVisibility(VISIBLE);
-                            empty.addView(view);
+                        case 1: {
+                            fillFront();
+                            frontContent.setX(initPadding[0] + initX + margin);
+                            frontContent.setY(initPadding[1] + initY + margin);
+                            break;
                         }
                     }
                 }

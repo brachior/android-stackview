@@ -4,6 +4,8 @@
     <declare-styleable name="StackView">
         <attr name="swipe" format="dimension" />
         <attr name="padding" format="dimension" />
+        <attr name="margin" format="dimension" />
+        <attr name="radius" format="dimension" />
         <attr name="animation_duration" format="integer" />
         <attr name="preview_layout" format="reference" />
     </declare-styleable>
