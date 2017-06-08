@@ -300,7 +300,7 @@ public class StackView extends FrameLayout {
                     view.draw(canvas);
 
                     RoundedBitmapDrawable dr = RoundedBitmapDrawableFactory.create(getResources(), bitmap);
-                    dr.setCornerRadius(radius * 4);
+                    dr.setCornerRadius(radius);
 
                     backContent.setImageDrawable(dr);
                     back.requestLayout();
@@ -391,8 +391,8 @@ public class StackView extends FrameLayout {
                     switch (adapter.getItemCount()) {
                         case 0: {
                             frontContent.setVisibility(GONE);
-                            frontContent.setX(initPadding[0] + initX + margin);
-                            frontContent.setY(initPadding[1] + initY + margin);
+                            frontContent.setX(initPadding[0] + initX);
+                            frontContent.setY(initPadding[1] + initY);
 
                             View view = adapter.createAndBindEmptyView(empty);
                             if (view != null) {
@@ -407,8 +407,8 @@ public class StackView extends FrameLayout {
                         }
                         case 1: {
                             fillFront();
-                            frontContent.setX(initPadding[0] + initX + margin);
-                            frontContent.setY(initPadding[1] + initY + margin);
+                            frontContent.setX(initPadding[0] + initX);
+                            frontContent.setY(initPadding[1] + initY);
                             break;
                         }
                     }

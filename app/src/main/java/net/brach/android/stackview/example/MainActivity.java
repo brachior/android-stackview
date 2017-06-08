@@ -3,6 +3,7 @@ package net.brach.android.stackview.example;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 
 import net.brach.android.stackview.StackView;
@@ -26,7 +27,7 @@ public class MainActivity extends AppCompatActivity {
         ));
     }
 
-    private class StackAdapter extends StackView.Adapter<Integer> {
+    private class StackAdapter extends StackView.Adapter {
         private final ArrayList<Integer> pictures;
 
         StackAdapter(Integer... pictures) {
@@ -35,21 +36,13 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
-        public Integer get(Position position) {
-            if (position.value + 1 > pictures.size()) {
-                return null;
-            }
-            return pictures.get(position.value);
+        public View onCreateView(ViewGroup parent, Position position) {
+            return getLayoutInflater().inflate(R.layout.card, parent, false);
         }
 
         @Override
-        public View createDefaultView() {
-            return getLayoutInflater().inflate(R.layout.card, null, false);
-        }
-
-        @Override
-        public void bindDefaultView(View view, Integer picture) {
-            ((ImageView) view.findViewById(R.id.img)).setImageResource(picture);
+        public void onBindView(View view, Position position) {
+            ((ImageView) view.findViewById(R.id.img)).setImageResource(pictures.get(position.value));
         }
 
         @Override
