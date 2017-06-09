@@ -10,6 +10,8 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.drawable.ShapeDrawable;
+import android.graphics.drawable.shapes.RoundRectShape;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -19,6 +21,7 @@ import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -27,31 +30,40 @@ import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 public class StackView extends FrameLayout {
+    private static final int SHADOW_CARD_COLOR = Color.parseColor("#90b1b1b1");
+    private static final int DEFAULT_ACTION_COLOR = Color.BLACK;
+
     private final int padding;
     private final int margin;
     private final int radius;
     private final int animDuration;
     private final int swipe;
     private final float border;
+    private final boolean actionEnable;
     private final int[] initPadding;
+
+    private final LinearLayout front;
+    private final FrameLayout frontContainer;
+    private View frontContent;
+    private final RelativeLayout frontAction;
 
     private final LinearLayout back;
     private final ImageView backContent;
 
     private final LinearLayout empty;
-    private final LinearLayout front;
     private final LinearLayout tmp;
 
     private float dX;
     private float dY;
     private float initX = -1;
     private float initY = -1;
-    private View frontContent;
     private Adapter adapter;
 
     public StackView(Context context) {
@@ -71,6 +83,13 @@ public class StackView extends FrameLayout {
         margin = (int) a.getDimension(R.styleable.StackView_margin, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, displayMetrics));
         padding = (int) a.getDimension(R.styleable.StackView_padding, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10, displayMetrics));
         radius = (int) a.getDimension(R.styleable.StackView_radius, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0, displayMetrics));
+
+        actionEnable = a.getBoolean(R.styleable.StackView_action_enable, true);
+        int actionColor = a.getColor(R.styleable.StackView_action_color, DEFAULT_ACTION_COLOR);
+        actionColor = Color.argb(127, Color.red(actionColor), Color.green(actionColor), Color.blue(actionColor));
+        String actionText = a.getString(R.styleable.StackView_action_text);
+        int actionAppearance = a.getResourceId(R.styleable.StackView_action_textAppearance, R.style.DefaultActionTextAppearance);
+
         animDuration = a.getInteger(R.styleable.StackView_animation_duration, 200);
         int layout = a.getResourceId(R.styleable.StackView_preview_layout, -1);
         a.recycle();
@@ -106,10 +125,26 @@ public class StackView extends FrameLayout {
         back.addView(backContent);
         addView(back);
 
+        frontAction = new RelativeLayout(context);
+        frontAction.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        frontAction.setGravity(Gravity.CENTER);
+        makeAndSetOverlay(frontAction, actionColor, radius);
+
+        TextView frontActionText = new TextView(context);
+        frontActionText.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        frontActionText.setText(actionText);
+        setTextAppearance(context, frontActionText, actionAppearance);
+        frontAction.addView(frontActionText);
+
+        frontContainer = new FrameLayout(context);
+        frontContainer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin, margin, margin, margin);
+
         front = new LinearLayout(context);
         front.setOrientation(LinearLayout.HORIZONTAL);
         LayoutParams frontParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         front.setLayoutParams(frontParams);
+        front.addView(frontContainer);
         addView(front);
 
         if (isInEditMode() && layout != -1) {
@@ -136,8 +171,8 @@ public class StackView extends FrameLayout {
                 fillFront();
 
                 if (initX == -1) {
-                    initX = frontContent.getX();
-                    initY = frontContent.getY();
+                    initX = frontContainer.getX();
+                    initY = frontContainer.getY();
                 }
                 break;
         }
@@ -260,8 +295,8 @@ public class StackView extends FrameLayout {
         switch (adapter.getItemCount()) {
             case 0:
                 if (frontContent != null) {
-                    frontContent.setVisibility(GONE);
-                    frontContent.requestLayout();
+                    frontContainer.setVisibility(GONE);
+                    frontContainer.requestLayout();
                 }
                 if (backContent.getDrawable() != null) {
                     back.setVisibility(GONE);
@@ -284,8 +319,8 @@ public class StackView extends FrameLayout {
                 empty.setVisibility(GONE);
                 if (frontContent != null) {
                     adapter.onBindView(frontContent, Adapter.Position.FIRST);
-                    frontContent.setVisibility(VISIBLE);
-                    frontContent.requestLayout();
+                    frontContainer.setVisibility(VISIBLE);
+                    frontContainer.requestLayout();
                 } else {
                     fillFront();
                 }
@@ -321,7 +356,7 @@ public class StackView extends FrameLayout {
                         final Paint paint = new Paint();
                         final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
                         final RectF rectF = new RectF(rect);
-                        paint.setColor(Color.parseColor("#90b1b1b1"));
+                        paint.setColor(SHADOW_CARD_COLOR);
                         paint.setStyle(Paint.Style.STROKE);
                         paint.setStrokeWidth(border);
                         canvas.drawRoundRect(rectF, radius, radius, paint);
@@ -338,17 +373,24 @@ public class StackView extends FrameLayout {
     }
 
     private void fillFront() {
-        frontContent = adapter.createAndBindView(front, Adapter.Position.FIRST);
-        ((MarginLayoutParams) frontContent.getLayoutParams()).setMargins(margin, margin, margin, margin);
+        frontContent = adapter.createAndBindView(frontContainer, Adapter.Position.FIRST);
+        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin, margin, margin, margin);
         requestLayout();
 
-        frontContent.setOnTouchListener(new OnTouchListener() {
+        frontContainer.setOnTouchListener(new OnTouchListener() {
             @Override
             public boolean onTouch(final View view, MotionEvent event) {
                 switch (event.getAction() & MotionEvent.ACTION_MASK) {
                     case MotionEvent.ACTION_DOWN:
-                        dX = frontContent.getX() - event.getRawX();
-                        dY = frontContent.getY() - event.getRawY();
+                        if (actionEnable) {
+                            frontContainer.addView(frontAction);
+
+                            int elevation = getCardViewElevation(frontContent);
+                            ((MarginLayoutParams) frontAction.getLayoutParams()).setMargins(elevation, elevation * 2, elevation, elevation * 2);
+                        }
+
+                        dX = frontContainer.getX() - event.getRawX();
+                        dY = frontContainer.getY() - event.getRawY();
 
                         if (backContent.getDrawable() != null) {
                             ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(500);
@@ -365,13 +407,17 @@ public class StackView extends FrameLayout {
                         }
                         break;
                     case MotionEvent.ACTION_UP:
-                        float delta = frontContent.getX() - initX;
+                        if (actionEnable) {
+                            frontContainer.removeView(frontAction);
+                        }
+
+                        float delta = frontContainer.getX() - initX;
                         if (delta > swipe) {
-                            remove(initX + frontContent.getWidth(), event.getRawY() + dY);
+                            remove(initX + frontContainer.getWidth(), event.getRawY() + dY);
                         } else if (delta < -swipe) {
-                            remove(initX - frontContent.getWidth(), event.getRawY() + dY);
+                            remove(initX - frontContainer.getWidth(), event.getRawY() + dY);
                         } else {
-                            frontContent.animate()
+                            frontContainer.animate()
                                     .x(initPadding[0] + initX + margin)
                                     .y(initPadding[1] + initY + margin)
                                     .setDuration(animDuration / 2)
@@ -391,7 +437,7 @@ public class StackView extends FrameLayout {
                         }
                         break;
                     case MotionEvent.ACTION_MOVE:
-                        frontContent.animate()
+                        frontContainer.animate()
                                 .x(event.getRawX() + dX)
                                 .y(event.getRawY() + dY)
                                 .setDuration(0)
@@ -405,7 +451,7 @@ public class StackView extends FrameLayout {
     }
 
     private void remove(float x, float y) {
-        ViewPropertyAnimator animator = frontContent.animate().x(x).y(y).setDuration(animDuration);
+        ViewPropertyAnimator animator = frontContainer.animate().x(x).y(y).setDuration(animDuration);
         animator.setListener(new StackView.AnimatorListenerHelper() {
             private boolean done = false;
 
@@ -418,9 +464,9 @@ public class StackView extends FrameLayout {
                     back.setVisibility(GONE);
                     switch (adapter.getItemCount()) {
                         case 0: {
-                            frontContent.setVisibility(GONE);
-                            frontContent.setX(initPadding[0] + initX);
-                            frontContent.setY(initPadding[1] + initY);
+                            frontContainer.setVisibility(GONE);
+                            frontContainer.setX(initPadding[0] + initX + margin);
+                            frontContainer.setY(initPadding[1] + initY + margin);
 
                             View view = adapter.createAndBindEmptyView(empty);
                             if (view != null) {
@@ -435,8 +481,8 @@ public class StackView extends FrameLayout {
                         }
                         case 1: {
                             fillFront();
-                            frontContent.setX(initPadding[0] + initX);
-                            frontContent.setY(initPadding[1] + initY);
+                            frontContainer.setX(initPadding[0] + initX + margin);
+                            frontContainer.setY(initPadding[1] + initY + margin);
                             break;
                         }
                     }
@@ -459,6 +505,27 @@ public class StackView extends FrameLayout {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    private void setTextAppearance(Context context, TextView view, int resource) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            view.setTextAppearance(resource);
+        } else {
+            view.setTextAppearance(context, resource);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void makeAndSetOverlay(View view, int color, int radius) {
+        ShapeDrawable actionDrawable = new ShapeDrawable(new RoundRectShape(
+                new float[] { radius, radius, radius, radius, radius, radius, radius, radius }, null, null));
+        actionDrawable.getPaint().setColor(color);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            view.setBackground(actionDrawable);
+        } else {
+            view.setBackgroundDrawable(actionDrawable);
+        }
+    }
+
     private int treatCardViewIfNecessary(View view) {
         if (view instanceof ViewGroup) {
             if (!removeCompatPadding(view)) {
@@ -470,6 +537,19 @@ public class StackView extends FrameLayout {
             } else {
                 Log.d("StackView", "view: " + view.getClass().toString());
                 return (int) getElevation(view);
+            }
+        }
+        return 0;
+    }
+
+    private int getCardViewElevation(View view) {
+        if (view instanceof ViewGroup) {
+            int elevation = (int) getElevation(view);
+            if (elevation == 0) {
+                View child = ((ViewGroup) view).getChildAt(0);
+                return (int) getElevation(child);
+            } else {
+                return elevation;
             }
         }
         return 0;

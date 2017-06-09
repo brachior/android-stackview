@@ -13,6 +13,7 @@
         app:padding="10dp"
         app:margin="15dp"
         app:radius="4dp"
+        app:action_text="NEXT"
         app:animation_duration="200"
         app:preview_layout="@layout/card"
         android:layout_width="match_parent"
