@@ -6,6 +6,10 @@ import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -13,6 +17,7 @@ import android.support.v4.graphics.drawable.RoundedBitmapDrawable;
 import android.support.v4.graphics.drawable.RoundedBitmapDrawableFactory;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -32,6 +37,7 @@ public class StackView extends FrameLayout {
     private final int radius;
     private final int animDuration;
     private final int swipe;
+    private final float border;
     private final int[] initPadding;
 
     private final LinearLayout back;
@@ -70,6 +76,7 @@ public class StackView extends FrameLayout {
         a.recycle();
 
         initPadding = new int[] {getPaddingLeft(), getPaddingTop(), getPaddingRight(), getPaddingBottom()};
+        border = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, displayMetrics);
 
         removeAllViews();
 
@@ -106,7 +113,8 @@ public class StackView extends FrameLayout {
         addView(front);
 
         if (isInEditMode() && layout != -1) {
-            inflate(getContext(), layout, front);
+            View inflate = inflate(getContext(), layout, front);
+            ((MarginLayoutParams) inflate.getLayoutParams()).setMargins(margin, margin, margin, margin);
         }
     }
 
@@ -292,22 +300,32 @@ public class StackView extends FrameLayout {
     private void fillBack() {
         final View view = adapter.createAndBindView(tmp, Adapter.Position.SECOND);
         // remove compat padding if CardView (it could be the view or its first child)
-        if (view instanceof ViewGroup) {
-            if (!removeCompatPadding(view)) {
-                View child = ((ViewGroup) view).getChildAt(0);
-                removeCompatPadding(child);
-            }
-        }
+        // and get card elevation
+        final int elevation = treatCardViewIfNecessary(view);
+        int backMargin = margin + elevation * 2;
+        ((MarginLayoutParams) back.getLayoutParams()).setMargins(backMargin, backMargin, backMargin, backMargin);
+        back.setPadding(padding, padding - elevation, padding, padding);
         addOnGlobalLayoutListener(view, new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
             public void onGlobalLayout() {
                 removeOnGlobalLayoutListener(view, this);
 
                 if (view.getWidth() != 0 && view.getHeight() != 0) {
-                    backContent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight()));
-                    Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+                    backContent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight() - elevation * 2));
+                    Bitmap bitmap = Bitmap.createBitmap(view.getWidth() - elevation * 2, view.getHeight() - elevation * 2, Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(bitmap);
                     view.draw(canvas);
+
+                    if (elevation > 0) {
+                        // draw border
+                        final Paint paint = new Paint();
+                        final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
+                        final RectF rectF = new RectF(rect);
+                        paint.setColor(Color.parseColor("#90b1b1b1"));
+                        paint.setStyle(Paint.Style.STROKE);
+                        paint.setStrokeWidth(border);
+                        canvas.drawRoundRect(rectF, radius, radius, paint);
+                    }
 
                     RoundedBitmapDrawable dr = RoundedBitmapDrawableFactory.create(getResources(), bitmap);
                     dr.setCornerRadius(radius);
@@ -441,6 +459,22 @@ public class StackView extends FrameLayout {
         }
     }
 
+    private int treatCardViewIfNecessary(View view) {
+        if (view instanceof ViewGroup) {
+            if (!removeCompatPadding(view)) {
+                View child = ((ViewGroup) view).getChildAt(0);
+                if (removeCompatPadding(child)) {
+                    Log.d("StackView", "child: " + child.getClass().toString());
+                    return (int) getElevation(child);
+                }
+            } else {
+                Log.d("StackView", "view: " + view.getClass().toString());
+                return (int) getElevation(view);
+            }
+        }
+        return 0;
+    }
+
     private static boolean removeCompatPadding(View view) {
         try {
             Method padding = view.getClass().getDeclaredMethod("setUseCompatPadding", boolean.class);
@@ -456,6 +490,22 @@ public class StackView extends FrameLayout {
         } catch (NoSuchMethodException ignored) {
         }
         return false;
+    }
+
+    private static float getElevation(View view) {
+        try {
+            Method elevation = view.getClass().getDeclaredMethod("getCardElevation");
+            elevation.setAccessible(true);
+            try {
+                return (float) elevation.invoke(view);
+            } catch (InvocationTargetException ignored) {
+            } catch (IllegalAccessException ignored) {
+            } finally {
+                elevation.setAccessible(false);
+            }
+        } catch (NoSuchMethodException ignored) {
+        }
+        return .0f;
     }
 
     private static abstract class AnimatorListenerHelper implements Animator.AnimatorListener {
