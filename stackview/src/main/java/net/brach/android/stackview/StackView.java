@@ -23,6 +23,9 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 public class StackView extends FrameLayout {
     private final int padding;
     private final int margin;
@@ -288,6 +291,13 @@ public class StackView extends FrameLayout {
 
     private void fillBack() {
         final View view = adapter.createAndBindView(tmp, Adapter.Position.SECOND);
+        // remove compat padding if CardView (it could be the view or its first child)
+        if (view instanceof ViewGroup) {
+            if (!removeCompatPadding(view)) {
+                View child = ((ViewGroup) view).getChildAt(0);
+                removeCompatPadding(child);
+            }
+        }
         addOnGlobalLayoutListener(view, new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
             public void onGlobalLayout() {
@@ -429,6 +439,23 @@ public class StackView extends FrameLayout {
         } else {
             view.getViewTreeObserver().removeGlobalOnLayoutListener(listener);
         }
+    }
+
+    private static boolean removeCompatPadding(View view) {
+        try {
+            Method padding = view.getClass().getDeclaredMethod("setUseCompatPadding", boolean.class);
+            padding.setAccessible(true);
+            try {
+                padding.invoke(view, false);
+                return true;
+            } catch (InvocationTargetException ignored) {
+            } catch (IllegalAccessException ignored) {
+            } finally {
+                padding.setAccessible(false);
+            }
+        } catch (NoSuchMethodException ignored) {
+        }
+        return false;
     }
 
     private static abstract class AnimatorListenerHelper implements Animator.AnimatorListener {
