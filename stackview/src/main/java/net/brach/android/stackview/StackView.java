@@ -404,15 +404,7 @@ public class StackView extends FrameLayout {
             @Override
             public boolean onTouch(final View view, MotionEvent event) {
                 switch (event.getAction() & MotionEvent.ACTION_MASK) {
-                    case MotionEvent.ACTION_DOWN:
-                        if (actionEnable) {
-                            frontContainer.removeView(frontAction);
-                            frontContainer.addView(frontAction);
-
-                            int elevation = getCardViewElevation(frontContent);
-                            ((MarginLayoutParams) frontAction.getLayoutParams()).setMargins(elevation, elevation * 2, elevation, elevation * 2);
-                        }
-
+                    case MotionEvent.ACTION_DOWN: {
                         dX = frontContainer.getX() - event.getRawX();
                         dY = frontContainer.getY() - event.getRawY();
 
@@ -430,11 +422,8 @@ public class StackView extends FrameLayout {
                             animator.start();
                         }
                         break;
-                    case MotionEvent.ACTION_UP:
-                        if (actionEnable) {
-                            frontContainer.removeView(frontAction);
-                        }
-
+                    }
+                    case MotionEvent.ACTION_UP: {
                         float delta = frontContainer.getX() - initX;
                         float m = (frontContainer.getY() - lastY) / (frontContainer.getX() - lastX);
                         float p = lastY - m * lastX;
@@ -465,7 +454,8 @@ public class StackView extends FrameLayout {
                             }
                         }
                         break;
-                    case MotionEvent.ACTION_MOVE:
+                    }
+                    case MotionEvent.ACTION_MOVE: {
                         frontContainer.animate()
                                 .x(event.getRawX() + dX)
                                 .y(event.getRawY() + dY)
@@ -476,7 +466,21 @@ public class StackView extends FrameLayout {
                         lastY = tmpY;
                         tmpX = event.getRawX() + dX;
                         tmpY = event.getRawY() + dY;
+
+                        if (actionEnable) {
+                            float delta = frontContainer.getX() - initX;
+                            if (delta > swipe || delta < -swipe) {
+                                frontContainer.removeView(frontAction);
+                                frontContainer.addView(frontAction);
+
+                                int elevation = getCardViewElevation(frontContent);
+                                ((MarginLayoutParams) frontAction.getLayoutParams()).setMargins(elevation, elevation * 2, elevation, elevation * 2);
+                            } else {
+                                frontContainer.removeView(frontAction);
+                            }
+                        }
                         break;
+                    }
                 }
                 front.invalidate();
                 return true;
