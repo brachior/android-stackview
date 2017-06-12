@@ -263,7 +263,7 @@ public class StackView extends FrameLayout {
         /**
          * Remove first element and animate the view.
          *
-         * Call the method {@see remove}.
+         * Call the method remove.
          *
          * @param direction animation direction
          */
@@ -429,10 +429,10 @@ public class StackView extends FrameLayout {
                         float p = lastY - m * lastX;
 
                         if (delta > swipe) {
-                            float nx = initX + frontContainer.getWidth();
+                            float nx = initX + (frontContainer.getWidth() + 300);
                             remove(nx, m * nx + p, animDuration);
                         } else if (delta < -swipe) {
-                            float nx = initX - frontContainer.getWidth();
+                            float nx = initX - (frontContainer.getWidth() + 300);
                             remove(nx, m * nx + p, animDuration);
                         } else {
                             frontContainer.animate()
