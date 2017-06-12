@@ -20,7 +20,6 @@ import android.support.v4.graphics.drawable.RoundedBitmapDrawable;
 import android.support.v4.graphics.drawable.RoundedBitmapDrawableFactory;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -174,6 +173,8 @@ public class StackView extends FrameLayout {
                 if (initX == -1) {
                     initX = frontContainer.getX();
                     initY = frontContainer.getY();
+
+
                 }
                 break;
         }
@@ -394,6 +395,12 @@ public class StackView extends FrameLayout {
         requestLayout();
 
         frontContainer.setOnTouchListener(new OnTouchListener() {
+            private float tmpX = initX;
+            private float tmpY = initY;
+
+            private float lastX = initX;
+            private float lastY = initY;
+
             @Override
             public boolean onTouch(final View view, MotionEvent event) {
                 switch (event.getAction() & MotionEvent.ACTION_MASK) {
@@ -429,10 +436,15 @@ public class StackView extends FrameLayout {
                         }
 
                         float delta = frontContainer.getX() - initX;
+                        float m = (frontContainer.getY() - lastY) / (frontContainer.getX() - lastX);
+                        float p = lastY - m * lastX;
+
                         if (delta > swipe) {
-                            remove(initX + frontContainer.getWidth(), event.getRawY() + dY);
+                            float nx = initX + frontContainer.getWidth();
+                            remove(nx, m * nx + p, animDuration);
                         } else if (delta < -swipe) {
-                            remove(initX - frontContainer.getWidth(), event.getRawY() + dY);
+                            float nx = initX - frontContainer.getWidth();
+                            remove(nx, m * nx + p, animDuration);
                         } else {
                             frontContainer.animate()
                                     .x(initPadding[0] + initX + margin)
@@ -459,6 +471,11 @@ public class StackView extends FrameLayout {
                                 .y(event.getRawY() + dY)
                                 .setDuration(0)
                                 .start();
+
+                        lastX = tmpX;
+                        lastY = tmpY;
+                        tmpX = event.getRawX() + dX;
+                        tmpY = event.getRawY() + dY;
                         break;
                 }
                 front.invalidate();
@@ -483,10 +500,10 @@ public class StackView extends FrameLayout {
             public void onAnimationStart(Animator animation) {
                 switch (direction) {
                     case LEFT:
-                        remove((int) (initX - frontContainer.getWidth()), initY);
+                        remove((int) (initX - frontContainer.getWidth()), initY, animDuration);
                         break;
                     case RIGHT:
-                        remove((int) (initX + frontContainer.getWidth()), initY);
+                        remove((int) (initX + frontContainer.getWidth()), initY, animDuration);
                         break;
                 }
             }
@@ -494,8 +511,8 @@ public class StackView extends FrameLayout {
         animator.start();
     }
 
-    private void remove(float x, float y) {
-        ViewPropertyAnimator animator = frontContainer.animate().x(x).y(y).setDuration(animDuration);
+    private void remove(float x, float y, int duration) {
+        ViewPropertyAnimator animator = frontContainer.animate().x(x).y(y).setDuration(duration);
         animator.setListener(new StackView.AnimatorListenerHelper() {
             private boolean done = false;
 
@@ -575,11 +592,9 @@ public class StackView extends FrameLayout {
             if (!removeCompatPadding(view)) {
                 View child = ((ViewGroup) view).getChildAt(0);
                 if (removeCompatPadding(child)) {
-                    Log.d("StackView", "child: " + child.getClass().toString());
                     return (int) getElevation(child);
                 }
             } else {
-                Log.d("StackView", "view: " + view.getClass().toString());
                 return (int) getElevation(view);
             }
         }
