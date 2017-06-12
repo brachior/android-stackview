@@ -1,6 +1,7 @@
 package net.brach.android.stackview;
 
 import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -179,8 +180,12 @@ public class StackView extends FrameLayout {
         requestLayout();
     }
 
+    public enum Direction {
+        LEFT, RIGHT
+    }
+
     public static abstract class Adapter {
-        private StackView listener;
+        private StackView stackView;
 
         public enum Position {
             FIRST(0), SECOND(1);
@@ -255,11 +260,22 @@ public class StackView extends FrameLayout {
         public abstract void remove();
 
         /**
+         * Remove first element and animate the view.
+         *
+         * Call the method {@see remove}.
+         *
+         * @param direction animation direction
+         */
+        public void remove(Direction direction) {
+            stackView.remove(direction);
+        }
+
+        /**
          * Notify any registered observers that the data set has changed.
          */
         public void notifyDataSetChangedOnMainThread() {
-            if (listener != null) {
-                listener.notifyDataSetChangedOnMainThread();
+            if (stackView != null) {
+                stackView.notifyDataSetChangedOnMainThread();
             }
         }
 
@@ -267,8 +283,8 @@ public class StackView extends FrameLayout {
          * Notify any registered observers that the data set has changed.
          */
         public void notifyDataSetChanged() {
-            if (listener != null) {
-                listener.notifyDataSetChanged();
+            if (stackView != null) {
+                stackView.notifyDataSetChanged();
             }
         }
 
@@ -277,7 +293,7 @@ public class StackView extends FrameLayout {
         /*************/
 
         void register(StackView listener) {
-            this.listener = listener;
+            this.stackView = listener;
         }
     }
 
@@ -394,7 +410,7 @@ public class StackView extends FrameLayout {
                         dY = frontContainer.getY() - event.getRawY();
 
                         if (backContent.getDrawable() != null) {
-                            ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(500);
+                            ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
                             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                                 @Override
                                 public void onAnimationUpdate(ValueAnimator animation) {
@@ -449,6 +465,33 @@ public class StackView extends FrameLayout {
                 return true;
             }
         });
+    }
+
+    private void remove(final Direction direction) {
+        final ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
+        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                int value = (int) animation.getAnimatedValue();
+
+                back.setPadding(value, value, value, value);
+                back.requestLayout();
+            }
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationStart(Animator animation) {
+                switch (direction) {
+                    case LEFT:
+                        remove((int) (initX - frontContainer.getWidth()), initY);
+                        break;
+                    case RIGHT:
+                        remove((int) (initX + frontContainer.getWidth()), initY);
+                        break;
+                }
+            }
+        });
+        animator.start();
     }
 
     private void remove(float x, float y) {

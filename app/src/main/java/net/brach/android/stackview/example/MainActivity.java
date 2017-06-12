@@ -10,6 +10,7 @@ import net.brach.android.stackview.StackView;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -29,10 +30,13 @@ public class MainActivity extends AppCompatActivity {
 
     private class StackAdapter extends StackView.Adapter {
         private final ArrayList<Integer> pictures;
+        private final Random random;
 
         StackAdapter(Integer... pictures) {
             this.pictures = new ArrayList<>(pictures.length);
             this.pictures.addAll(Arrays.asList(pictures));
+
+            this.random = new Random();
         }
 
         @Override
@@ -43,6 +47,15 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onBindView(View view, Position position) {
             ((ImageView) view.findViewById(R.id.img)).setImageResource(pictures.get(position.value));
+
+            view.findViewById(R.id.next).setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    remove(random.nextBoolean() ?
+                            StackView.Direction.LEFT
+                            : StackView.Direction.RIGHT);
+                }
+            });
         }
 
         @Override
