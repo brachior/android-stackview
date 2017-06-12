@@ -383,6 +383,7 @@ public class StackView extends FrameLayout {
                 switch (event.getAction() & MotionEvent.ACTION_MASK) {
                     case MotionEvent.ACTION_DOWN:
                         if (actionEnable) {
+                            frontContainer.removeView(frontAction);
                             frontContainer.addView(frontAction);
 
                             int elevation = getCardViewElevation(frontContent);
