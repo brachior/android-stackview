@@ -161,6 +161,7 @@ public class StackView extends FrameLayout {
             case 0:
                 View view = adapter.createAndBindEmptyView(empty);
                 if (view != null) {
+                    empty.addView(view, -1);
                     empty.setVisibility(VISIBLE);
                 }
                 break;
@@ -321,6 +322,7 @@ public class StackView extends FrameLayout {
                 }
                 View view = adapter.createAndBindEmptyView(empty);
                 if (view != null) {
+                    empty.addView(view, -1);
                     empty.setVisibility(VISIBLE);
                 }
                 break;
@@ -516,6 +518,10 @@ public class StackView extends FrameLayout {
     }
 
     private void remove(float x, float y, int duration) {
+        if (actionEnable) {
+            frontContainer.removeView(frontAction);
+        }
+
         ViewPropertyAnimator animator = frontContainer.animate().x(x).y(y).setDuration(duration);
         animator.setListener(new StackView.AnimatorListenerHelper() {
             private boolean done = false;
@@ -535,6 +541,7 @@ public class StackView extends FrameLayout {
 
                             View view = adapter.createAndBindEmptyView(empty);
                             if (view != null) {
+                                empty.addView(view, -1);
                                 empty.setVisibility(VISIBLE);
                             }
                             break;
