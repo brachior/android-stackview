@@ -97,6 +97,7 @@ public class StackView extends FrameLayout {
         int actionAppearance = a.getResourceId(R.styleable.StackView_action_textAppearance, R.style.DefaultActionTextAppearance);
 
         animDuration = a.getInteger(R.styleable.StackView_animation_duration, 200);
+        int actionAnimDuration = a.getInteger(R.styleable.StackView_action_animation_duration, 150);
         int layout = a.getResourceId(R.styleable.StackView_preview_layout, -1);
         a.recycle();
 
@@ -155,7 +156,7 @@ public class StackView extends FrameLayout {
 
         // animation listeners
         addActionAnim = ValueAnimator.ofFloat(0.f, 1.f);
-        addActionAnim.setDuration(150);
+        addActionAnim.setDuration(actionAnimDuration);
         addActionAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
@@ -172,7 +173,7 @@ public class StackView extends FrameLayout {
         });
 
         removeActionAnim = ValueAnimator.ofFloat(1.f, 0.f);
-        removeActionAnim.setDuration(150);
+        removeActionAnim.setDuration(actionAnimDuration);
         removeActionAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {

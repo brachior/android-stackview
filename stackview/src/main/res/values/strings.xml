@@ -11,6 +11,7 @@
         <attr name="action_color" format="color" />
         <attr name="action_text" format="string" />
         <attr name="action_textAppearance" format="reference" />
+        <attr name="action_animation_duration" format="integer" />
 
         <attr name="animation_duration" format="integer" />
         <attr name="preview_layout" format="reference" />

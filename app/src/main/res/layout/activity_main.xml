@@ -15,6 +15,7 @@
         app:radius="4dp"
         app:action_text="NEXT"
         app:animation_duration="200"
+        app:action_animation_duration="500"
         app:preview_layout="@layout/card"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
