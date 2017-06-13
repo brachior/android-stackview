@@ -40,6 +40,23 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
+        public View createAndBindEmptyView(ViewGroup parent) {
+            View view = getLayoutInflater().inflate(R.layout.empty, parent, false);
+            view.findViewById(R.id.retry).setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    pictures.add(R.drawable.cat_1);
+                    pictures.add(R.drawable.cat_2);
+                    pictures.add(R.drawable.cat_3);
+                    pictures.add(R.drawable.cat_4);
+
+                    notifyDataSetChangedOnMainThread();
+                }
+            });
+            return view;
+        }
+
+        @Override
         public View onCreateView(ViewGroup parent, Position position) {
             return getLayoutInflater().inflate(R.layout.card, parent, false);
         }
@@ -65,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void remove() {
-            pictures.add(pictures.remove(0));
+            pictures.remove(0);
         }
     }
 }
