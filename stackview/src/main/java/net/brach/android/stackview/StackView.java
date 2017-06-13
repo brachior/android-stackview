@@ -4,6 +4,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -35,6 +36,7 @@ import android.widget.TextView;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StackView extends FrameLayout {
     private static final int SHADOW_CARD_COLOR = Color.parseColor("#90b1b1b1");
@@ -42,10 +44,8 @@ public class StackView extends FrameLayout {
 
     private final int padding;
     private final int margin;
-    private final int radius;
     private final int animDuration;
     private final int swipe;
-    private final float border;
     private final boolean actionEnable;
     private final int[] initPadding;
 
@@ -60,11 +60,17 @@ public class StackView extends FrameLayout {
     private final LinearLayout empty;
     private final LinearLayout tmp;
 
-    private float dX;
-    private float dY;
     private float initX = -1;
     private float initY = -1;
     private Adapter adapter;
+
+    private final ValueAnimator addActionAnim;
+    private final ValueAnimator removeActionAnim;
+    private final RemoveDirectionAnimator removeDirectionAnim;
+
+    private final FrontContainerOnTouchListener frontContainerOnTouchListener;
+    private final BackContentOnGlobalLayoutListener backContentOnGlobalLayoutListener;
+    private final AnimatorListenerHelper removeAnimatorListener;
 
     public StackView(Context context) {
         this(context, null);
@@ -82,7 +88,7 @@ public class StackView extends FrameLayout {
         swipe = (int) a.getDimension(R.styleable.StackView_swipe, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 67, displayMetrics));
         margin = (int) a.getDimension(R.styleable.StackView_margin, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, displayMetrics));
         padding = (int) a.getDimension(R.styleable.StackView_padding, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10, displayMetrics));
-        radius = (int) a.getDimension(R.styleable.StackView_radius, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0, displayMetrics));
+        int radius = (int) a.getDimension(R.styleable.StackView_radius, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0, displayMetrics));
 
         actionEnable = a.getBoolean(R.styleable.StackView_action_enable, true);
         int actionColor = a.getColor(R.styleable.StackView_action_color, DEFAULT_ACTION_COLOR);
@@ -95,7 +101,7 @@ public class StackView extends FrameLayout {
         a.recycle();
 
         initPadding = new int[] {getPaddingLeft(), getPaddingTop(), getPaddingRight(), getPaddingBottom()};
-        border = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, displayMetrics);
+        float border = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, displayMetrics);
 
         removeAllViews();
 
@@ -147,6 +153,73 @@ public class StackView extends FrameLayout {
         front.addView(frontContainer);
         addView(front);
 
+        // animation listeners
+        addActionAnim = ValueAnimator.ofFloat(0.f, 1.f);
+        addActionAnim.setDuration(150);
+        addActionAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float value = (float) animation.getAnimatedValue();
+                frontAction.setAlpha(value);
+                frontAction.requestLayout();
+            }
+        });
+        addActionAnim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                onOpen.set(false);
+            }
+        });
+
+        removeActionAnim = ValueAnimator.ofFloat(1.f, 0.f);
+        removeActionAnim.setDuration(150);
+        removeActionAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float value = (float) animation.getAnimatedValue();
+                frontAction.setAlpha(value);
+                frontAction.requestLayout();
+            }
+        });
+        removeActionAnim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                frontContainer.removeView(frontAction);
+                onClose.set(false);
+            }
+        });
+
+        removeDirectionAnim = new RemoveDirectionAnimator(padding, animDuration);
+        removeDirectionAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                int value = (int) animation.getAnimatedValue();
+
+                back.setPadding(value, value, value, value);
+                back.requestLayout();
+            }
+        });
+        removeDirectionAnim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationStart(Animator animation) {
+                switch (removeDirectionAnim.direction) {
+                    case LEFT:
+                        remove((int) (initX - frontContainer.getWidth()), initY, animDuration);
+                        break;
+                    case RIGHT:
+                        remove((int) (initX + frontContainer.getWidth()), initY, animDuration);
+                        break;
+                }
+            }
+        });
+
+        frontContainerOnTouchListener = new FrontContainerOnTouchListener(this);
+
+        backContentOnGlobalLayoutListener = new BackContentOnGlobalLayoutListener(
+                getResources(), back, backContent, radius, border);
+
+        removeAnimatorListener = new AnimatorListenerHelper(this, frontContainer, back, empty, padding, margin, initPadding);
+
         if (isInEditMode() && layout != -1) {
             View inflate = inflate(getContext(), layout, front);
             ((MarginLayoutParams) inflate.getLayoutParams()).setMargins(margin, margin, margin, margin);
@@ -174,8 +247,8 @@ public class StackView extends FrameLayout {
                 if (initX == -1) {
                     initX = frontContainer.getX();
                     initY = frontContainer.getY();
-
-
+                    frontContainerOnTouchListener.initPosition();
+                    removeAnimatorListener.initPosition();
                 }
                 break;
         }
@@ -352,43 +425,16 @@ public class StackView extends FrameLayout {
     /*************/
 
     private void fillBack() {
-        final View view = adapter.createAndBindView(tmp, Adapter.Position.SECOND);
+        View view = adapter.createAndBindView(tmp, Adapter.Position.SECOND);
         // remove compat padding if CardView (it could be the view or its first child)
         // and get card elevation
-        final int elevation = treatCardViewIfNecessary(view);
+        int elevation = treatCardViewIfNecessary(view);
         int backMargin = margin + elevation * 2;
         ((MarginLayoutParams) back.getLayoutParams()).setMargins(backMargin, backMargin, backMargin, backMargin);
         back.setPadding(padding, padding - elevation, padding, padding);
-        addOnGlobalLayoutListener(view, new ViewTreeObserver.OnGlobalLayoutListener() {
-            @Override
-            public void onGlobalLayout() {
-                removeOnGlobalLayoutListener(view, this);
 
-                if (view.getWidth() != 0 && view.getHeight() != 0) {
-                    backContent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight() - elevation * 2));
-                    Bitmap bitmap = Bitmap.createBitmap(view.getWidth() - elevation * 2, view.getHeight() - elevation * 2, Bitmap.Config.ARGB_8888);
-                    Canvas canvas = new Canvas(bitmap);
-                    view.draw(canvas);
-
-                    if (elevation > 0) {
-                        // draw border
-                        final Paint paint = new Paint();
-                        final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-                        final RectF rectF = new RectF(rect);
-                        paint.setColor(SHADOW_CARD_COLOR);
-                        paint.setStyle(Paint.Style.STROKE);
-                        paint.setStrokeWidth(border);
-                        canvas.drawRoundRect(rectF, radius, radius, paint);
-                    }
-
-                    RoundedBitmapDrawable dr = RoundedBitmapDrawableFactory.create(getResources(), bitmap);
-                    dr.setCornerRadius(radius);
-
-                    backContent.setImageDrawable(dr);
-                    back.requestLayout();
-                }
-            }
-        });
+        backContentOnGlobalLayoutListener.init(view, elevation);
+        addOnGlobalLayoutListener(view, backContentOnGlobalLayoutListener);
     }
 
     private void fillFront() {
@@ -396,171 +442,23 @@ public class StackView extends FrameLayout {
         ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin, margin, margin, margin);
         requestLayout();
 
-        frontContainer.setOnTouchListener(new OnTouchListener() {
-            private float tmpX = initX;
-            private float tmpY = initY;
-
-            private float lastX = initX;
-            private float lastY = initY;
-
-            @Override
-            public boolean onTouch(final View view, MotionEvent event) {
-                switch (event.getAction() & MotionEvent.ACTION_MASK) {
-                    case MotionEvent.ACTION_DOWN: {
-                        dX = frontContainer.getX() - event.getRawX();
-                        dY = frontContainer.getY() - event.getRawY();
-
-                        if (backContent.getDrawable() != null) {
-                            ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
-                            animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                                @Override
-                                public void onAnimationUpdate(ValueAnimator animation) {
-                                    int value = (int) animation.getAnimatedValue();
-
-                                    back.setPadding(value, value, value, value);
-                                    back.requestLayout();
-                                }
-                            });
-                            animator.start();
-                        }
-                        break;
-                    }
-                    case MotionEvent.ACTION_UP: {
-                        float delta = frontContainer.getX() - initX;
-                        float m = (frontContainer.getY() - lastY) / (frontContainer.getX() - lastX);
-                        float p = lastY - m * lastX;
-
-                        if (delta > swipe) {
-                            float nx = initX + (frontContainer.getWidth() + 300);
-                            remove(nx, m * nx + p, animDuration);
-                        } else if (delta < -swipe) {
-                            float nx = initX - (frontContainer.getWidth() + 300);
-                            remove(nx, m * nx + p, animDuration);
-                        } else {
-                            frontContainer.animate()
-                                    .x(initPadding[0] + initX + margin)
-                                    .y(initPadding[1] + initY + margin)
-                                    .setDuration(animDuration / 2)
-                                    .start();
-                            if (backContent.getDrawable() != null) {
-                                ValueAnimator animator = ValueAnimator.ofInt(0, padding).setDuration(animDuration);
-                                animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                                    @Override
-                                    public void onAnimationUpdate(ValueAnimator animation) {
-                                        int value = (int) animation.getAnimatedValue();
-                                        back.setPadding(value, value, value, value);
-                                        back.requestLayout();
-                                    }
-                                });
-                                animator.start();
-                            }
-                        }
-                        break;
-                    }
-                    case MotionEvent.ACTION_MOVE: {
-                        frontContainer.animate()
-                                .x(event.getRawX() + dX)
-                                .y(event.getRawY() + dY)
-                                .setDuration(0)
-                                .start();
-
-                        lastX = tmpX;
-                        lastY = tmpY;
-                        tmpX = event.getRawX() + dX;
-                        tmpY = event.getRawY() + dY;
-
-                        if (actionEnable) {
-                            float delta = frontContainer.getX() - initX;
-                            if (delta > swipe || delta < -swipe) {
-                                frontContainer.removeView(frontAction);
-                                frontContainer.addView(frontAction);
-
-                                int elevation = getCardViewElevation(frontContent);
-                                ((MarginLayoutParams) frontAction.getLayoutParams()).setMargins(elevation, elevation * 2, elevation, elevation * 2);
-                            } else {
-                                frontContainer.removeView(frontAction);
-                            }
-                        }
-                        break;
-                    }
-                }
-                front.invalidate();
-                return true;
-            }
-        });
+        frontContainerOnTouchListener.init();
+        frontContainer.setOnTouchListener(frontContainerOnTouchListener);
     }
 
     private void remove(final Direction direction) {
-        final ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
-        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                int value = (int) animation.getAnimatedValue();
-
-                back.setPadding(value, value, value, value);
-                back.requestLayout();
-            }
-        });
-        animator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-                switch (direction) {
-                    case LEFT:
-                        remove((int) (initX - frontContainer.getWidth()), initY, animDuration);
-                        break;
-                    case RIGHT:
-                        remove((int) (initX + frontContainer.getWidth()), initY, animDuration);
-                        break;
-                }
-            }
-        });
-        animator.start();
+        removeDirectionAnim.direction = direction;
+        removeDirectionAnim.start();
     }
 
     private void remove(float x, float y, int duration) {
         if (actionEnable) {
-            frontContainer.removeView(frontAction);
+            removeActionView();
         }
 
         ViewPropertyAnimator animator = frontContainer.animate().x(x).y(y).setDuration(duration);
-        animator.setListener(new StackView.AnimatorListenerHelper() {
-            private boolean done = false;
-
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                if (!done) {
-                    done = true;
-
-                    adapter.remove();
-                    back.setVisibility(GONE);
-                    switch (adapter.getItemCount()) {
-                        case 0: {
-                            frontContainer.setVisibility(GONE);
-                            frontContainer.setX(initPadding[0] + initX + margin);
-                            frontContainer.setY(initPadding[1] + initY + margin);
-
-                            View view = adapter.createAndBindEmptyView(empty);
-                            if (view != null) {
-                                empty.addView(view, -1);
-                                empty.setVisibility(VISIBLE);
-                            }
-                            break;
-                        }
-                        default: {
-                            back.setVisibility(VISIBLE);
-                            fillBack();
-                            back.setPadding(padding, padding, padding, padding);
-                        }
-                        case 1: {
-                            fillFront();
-                            frontContainer.setX(initPadding[0] + initX + margin);
-                            frontContainer.setY(initPadding[1] + initY + margin);
-                            break;
-                        }
-                    }
-                }
-            }
-        });
+        removeAnimatorListener.init(adapter);
+        animator.setListener(removeAnimatorListener);
         animator.start();
     }
 
@@ -574,6 +472,27 @@ public class StackView extends FrameLayout {
             view.getViewTreeObserver().removeOnGlobalLayoutListener(listener);
         } else {
             view.getViewTreeObserver().removeGlobalOnLayoutListener(listener);
+        }
+    }
+
+    private AtomicBoolean onClose = new AtomicBoolean(false);
+    private AtomicBoolean onOpen = new AtomicBoolean(false);
+
+    private void removeActionView() {
+        if (frontContainer.indexOfChild(frontAction) != -1 && onClose.compareAndSet(false, true)) {
+            frontAction.setAlpha(1.f);
+            removeActionAnim.start();
+        }
+    }
+
+    private void addActionView() {
+        if (frontContainer.indexOfChild(frontAction) == -1 && onOpen.compareAndSet(false, true)) {
+            frontAction.setAlpha(0.f);
+            frontContainer.addView(frontAction);
+
+            int elevation = getCardViewElevation(frontContent);
+            ((MarginLayoutParams) frontAction.getLayoutParams()).setMargins(elevation, elevation * 2, elevation, elevation * 2);
+            addActionAnim.start();
         }
     }
 
@@ -658,7 +577,293 @@ public class StackView extends FrameLayout {
         return .0f;
     }
 
-    private static abstract class AnimatorListenerHelper implements Animator.AnimatorListener {
+    /***************/
+    /** listeners **/
+    /***************/
+
+    private static class BackContentOnGlobalLayoutListener
+            implements ViewTreeObserver.OnGlobalLayoutListener {
+        private final int radius;
+        private final float border;
+
+        private final Resources resources;
+        private final LinearLayout back;
+        private final ImageView backContent;
+
+        private View view;
+        private int elevation;
+
+        private BackContentOnGlobalLayoutListener(
+                Resources resources, LinearLayout back, ImageView backContent,
+                int radius, float border) {
+            this.resources = resources;
+
+            this.back = back;
+            this.backContent = backContent;
+            this.radius = radius;
+            this.border = border;
+        }
+
+        void init(View view, int elevation) {
+            this.view = view;
+            this.elevation = elevation;
+        }
+
+        @Override
+        public void onGlobalLayout() {
+            removeOnGlobalLayoutListener(view, this);
+
+            if (view.getWidth() != 0 && view.getHeight() != 0) {
+                backContent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight() - elevation * 2));
+                Bitmap bitmap = Bitmap.createBitmap(view.getWidth() - elevation * 2, view.getHeight() - elevation * 2, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(bitmap);
+                view.draw(canvas);
+
+                if (elevation > 0) {
+                    // draw border
+                    final Paint paint = new Paint();
+                    final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
+                    final RectF rectF = new RectF(rect);
+                    paint.setColor(SHADOW_CARD_COLOR);
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(border);
+                    canvas.drawRoundRect(rectF, radius, radius, paint);
+                }
+
+                RoundedBitmapDrawable dr = RoundedBitmapDrawableFactory.create(resources, bitmap);
+                dr.setCornerRadius(radius);
+
+                backContent.setImageDrawable(dr);
+                back.requestLayout();
+            }
+        }
+    }
+
+    private static class RemoveDirectionAnimator extends ValueAnimator {
+        private final ValueAnimator animator;
+        Direction direction;
+
+        RemoveDirectionAnimator(int padding, int animDuration) {
+            animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
+        }
+
+        public void addListener(AnimatorListener listener) {
+            animator.addListener(listener);
+        }
+
+        public void addUpdateListener(AnimatorUpdateListener listener) {
+            animator.addUpdateListener(listener);
+        }
+
+        public void start() {
+            animator.start();
+        }
+    }
+
+    private static class FrontContainerOnTouchListener implements OnTouchListener {
+        private final StackView self;
+        private final LinearLayout front;
+        private final FrameLayout frontContainer;
+        private final LinearLayout back;
+        private final ImageView backContent;
+
+        private final int padding;
+        private final int margin;
+        private final int animDuration;
+        private final int swipe;
+        private final boolean actionEnable;
+        private final int[] initPadding;
+
+        private float dX, dY;
+        private float tmpX, tmpY;
+        private float lastX, lastY;
+        private float initX, initY;
+
+        FrontContainerOnTouchListener(StackView self) {
+            this.self = self;
+            this.front = self.front;
+            this.frontContainer = self.frontContainer;
+            this.back = self.back;
+            this.backContent = self.backContent;
+
+            this.padding = self.padding;
+            this.margin = self.margin;
+            this.animDuration = self.animDuration;
+            this.swipe = self.swipe;
+            this.actionEnable = self.actionEnable;
+            this.initPadding = self.initPadding;
+        }
+
+        void initPosition() {
+            this.initX = self.initX;
+            this.initY = self.initY;
+        }
+
+        void init() {
+            tmpX = initX;
+            tmpY = initY;
+
+            lastX = initX;
+            lastY = initY;
+        }
+
+        @Override
+        public boolean onTouch(final View view, MotionEvent event) {
+            switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                case MotionEvent.ACTION_DOWN: {
+                    dX = frontContainer.getX() - event.getRawX();
+                    dY = frontContainer.getY() - event.getRawY();
+
+                    if (backContent.getDrawable() != null) {
+                        ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
+                        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                            @Override
+                            public void onAnimationUpdate(ValueAnimator animation) {
+                                int value = (int) animation.getAnimatedValue();
+
+                                back.setPadding(value, value, value, value);
+                                back.requestLayout();
+                            }
+                        });
+                        animator.start();
+                    }
+                    break;
+                }
+                case MotionEvent.ACTION_UP: {
+                    float delta = frontContainer.getX() - initX;
+                    float m = (frontContainer.getY() - lastY) / (frontContainer.getX() - lastX);
+                    float p = lastY - m * lastX;
+
+                    if (delta > swipe) {
+                        float nx = initX + (frontContainer.getWidth() + 300);
+                        self.remove(nx, m * nx + p, animDuration);
+                    } else if (delta < -swipe) {
+                        float nx = initX - (frontContainer.getWidth() + 300);
+                        self.remove(nx, m * nx + p, animDuration);
+                    } else {
+                        frontContainer.animate()
+                                .x(initPadding[0] + initX + margin)
+                                .y(initPadding[1] + initY + margin)
+                                .setDuration(animDuration / 2)
+                                .start();
+                        if (backContent.getDrawable() != null) {
+                            ValueAnimator animator = ValueAnimator.ofInt(0, padding).setDuration(animDuration);
+                            animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                                @Override
+                                public void onAnimationUpdate(ValueAnimator animation) {
+                                    int value = (int) animation.getAnimatedValue();
+                                    back.setPadding(value, value, value, value);
+                                    back.requestLayout();
+                                }
+                            });
+                            animator.start();
+                        }
+                    }
+                    break;
+                }
+                case MotionEvent.ACTION_MOVE: {
+                    frontContainer.animate()
+                            .x(event.getRawX() + dX)
+                            .y(event.getRawY() + dY)
+                            .setDuration(0)
+                            .start();
+
+                    lastX = tmpX;
+                    lastY = tmpY;
+                    tmpX = event.getRawX() + dX;
+                    tmpY = event.getRawY() + dY;
+
+                    if (actionEnable) {
+                        float delta = frontContainer.getX() - initX;
+                        if (delta > swipe || delta < -swipe) {
+                            self.addActionView();
+                        } else {
+                            self.removeActionView();
+                        }
+                    }
+                    break;
+                }
+            }
+            front.invalidate();
+            return true;
+        }
+    }
+
+    private static class AnimatorListenerHelper implements Animator.AnimatorListener {
+        private final StackView self;
+
+        private final int padding;
+        private final int margin;
+        private final int[] initPadding;
+
+        private final FrameLayout frontContainer;
+        private final LinearLayout back;
+        private final LinearLayout empty;
+
+        private float initX;
+        private float initY;
+        private Adapter adapter;
+
+        private boolean done = false;
+
+        private AnimatorListenerHelper(
+                StackView stackView, FrameLayout frontContainer,
+                LinearLayout back, LinearLayout empty,
+                int padding, int margin, int[] initPadding) {
+            this.self = stackView;
+            this.frontContainer = frontContainer;
+            this.back = back;
+            this.empty = empty;
+            this.padding = padding;
+            this.margin = margin;
+            this.initPadding = initPadding;
+        }
+
+        void initPosition() {
+            this.initX = self.initX;
+            this.initY = self.initY;
+        }
+
+        void init(Adapter adapter) {
+            this.adapter = adapter;
+            this.done = false;
+        }
+
+        @Override
+        public void onAnimationEnd(Animator animation) {
+            if (!done) {
+                done = true;
+
+                adapter.remove();
+                back.setVisibility(GONE);
+                switch (adapter.getItemCount()) {
+                    case 0: {
+                        frontContainer.setVisibility(GONE);
+                        frontContainer.setX(initPadding[0] + initX + margin);
+                        frontContainer.setY(initPadding[1] + initY + margin);
+
+                        View view = adapter.createAndBindEmptyView(empty);
+                        if (view != null) {
+                            empty.addView(view, -1);
+                            empty.setVisibility(VISIBLE);
+                        }
+                        break;
+                    }
+                    default: {
+                        back.setVisibility(VISIBLE);
+                        self.fillBack();
+                        back.setPadding(padding, padding, padding, padding);
+                    }
+                    case 1: {
+                        self.fillFront();
+                        frontContainer.setX(initPadding[0] + initX + margin);
+                        frontContainer.setY(initPadding[1] + initY + margin);
+                        break;
+                    }
+                }
+            }
+        }
+
         @Override
         public void onAnimationStart(Animator animation) {}
 
