@@ -64,8 +64,8 @@ install {
 
             licenses {
                 license {
-                    name 'GNU General Public Licence (GPL)'
-                    url 'https://www.gnu.org/licenses/gpl.html'
+                    name 'Do What the Fuck You Want to Public License (WTFPL)'
+                    url 'http://www.wtfpl.net/'
                 }
             }
             scm {
