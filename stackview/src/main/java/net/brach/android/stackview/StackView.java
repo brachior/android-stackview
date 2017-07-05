@@ -56,6 +56,7 @@ public class StackView extends FrameLayout {
 
     private final LinearLayout back;
     private final ImageView backContent;
+    private boolean backInit;
 
     private final LinearLayout empty;
     private final LinearLayout tmp;
@@ -346,21 +347,95 @@ public class StackView extends FrameLayout {
             stackView.remove(direction);
         }
 
-        /**
-         * Notify any registered observers that the data set has changed.
-         */
+        /********************/
+        /** in main thread **/
+        /********************/
+
         public void notifyDataSetChangedOnMainThread() {
             if (stackView != null) {
-                stackView.notifyDataSetChangedOnMainThread();
+                stackView.notify(0, true);
             }
         }
 
-        /**
-         * Notify any registered observers that the data set has changed.
-         */
+        public void notifyItemInsertedOnMainThread(int position) {
+            if (stackView != null) {
+                stackView.notify(position, true);
+            }
+        }
+
+        public void notifyItemRemovedOnMainThread(int position) {
+            if (stackView != null) {
+                stackView.notify(position, true);
+            }
+        }
+
+        public void notifyItemChangedOnMainThread(int position) {
+            if (stackView != null) {
+                stackView.notify(position, true);
+            }
+        }
+
+        public void notifyItemRangeInsertedOnMainThread(int positionStart, int itemCount) {
+            if (stackView != null) {
+                stackView.notifyRange(positionStart, itemCount, true);
+            }
+        }
+
+        public void notifyItemRangeRemovedOnMainThread(int positionStart, int itemCount) {
+            if (stackView != null) {
+                stackView.notifyRange(positionStart, itemCount, true);
+            }
+        }
+
+        public void notifyItemRangeChangedOnMainThread(int positionStart, int itemCount) {
+            if (stackView != null) {
+                stackView.notifyRange(positionStart, itemCount, true);
+            }
+        }
+
+        /************************/
+        /** not in main thread **/
+        /************************/
+
         public void notifyDataSetChanged() {
             if (stackView != null) {
-                stackView.notifyDataSetChanged();
+                stackView.notify(0, false);
+            }
+        }
+
+        public void notifyItemInserted(int position) {
+            if (stackView != null) {
+                stackView.notify(position, false);
+            }
+        }
+
+        public void notifyItemRemoved(int position) {
+            if (stackView != null) {
+                stackView.notify(position, false);
+            }
+        }
+
+        public void notifyItemChanged(int position) {
+            if (stackView != null) {
+                stackView.notify(position, false);
+            }
+        }
+
+        public void notifyItemRangeInserted(int positionStart, int itemCount, boolean inMainThread) {
+            if (stackView != null) {
+                stackView.notifyRange(positionStart, itemCount, false);
+            }
+        }
+
+        public void notifyItemRangeRemoved(int positionStart, int itemCount, boolean inMainThread) {
+            if (stackView != null) {
+                stackView.notifyRange(positionStart, itemCount, false);
+            }
+        }
+
+        public void notifyItemRangeChanged(int positionStart, int itemCount, boolean inMainThread) {
+            if (stackView != null) {
+                stackView.notifyRange(positionStart, itemCount, false);
             }
         }
 
@@ -373,13 +448,28 @@ public class StackView extends FrameLayout {
         }
     }
 
-    void notifyDataSetChangedOnMainThread() {
-        new Handler(Looper.getMainLooper()).post(new Runnable() {
-            @Override
-            public void run() {
-                notifyDataSetChanged();
-            }
-        });
+    void notify(int position, boolean inMainThread) {
+        switch (position) {
+            case 0:
+            case 1:
+                if (inMainThread) {
+                    new Handler(Looper.getMainLooper()).post(new Runnable() {
+                        @Override
+                        public void run() {
+                            notifyDataSetChanged();
+                        }
+                    });
+                } else {
+                    notifyDataSetChanged();
+                }
+                break;
+        }
+    }
+
+    void notifyRange(int positionStart, int itemCount, boolean inMainThread) {
+        if (itemCount > 0 && positionStart < 2) {
+            notify(positionStart, inMainThread);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -432,7 +522,10 @@ public class StackView extends FrameLayout {
         int elevation = treatCardViewIfNecessary(view);
         int backMargin = margin + elevation * 2;
         ((MarginLayoutParams) back.getLayoutParams()).setMargins(backMargin, backMargin, backMargin, backMargin);
-        back.setPadding(padding, padding - elevation, padding, padding);
+        if (!backInit) {
+            backInit = true;
+            back.setPadding(padding, padding - elevation, padding, padding);
+        }
 
         backContentOnGlobalLayoutListener.init(view, elevation);
         addOnGlobalLayoutListener(view, backContentOnGlobalLayoutListener);
