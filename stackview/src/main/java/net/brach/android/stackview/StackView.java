@@ -2,6 +2,7 @@ package net.brach.android.stackview;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.Resources;
@@ -42,8 +43,8 @@ public class StackView extends FrameLayout {
     private static final int SHADOW_CARD_COLOR = Color.parseColor("#90b1b1b1");
     private static final int DEFAULT_ACTION_COLOR = Color.BLACK;
 
-    private final int padding;
-    private final int margin;
+    private final int[] padding;
+    private final int[] margin;
     private final int animDuration;
     private final int swipe;
     private final boolean actionEnable;
@@ -87,9 +88,29 @@ public class StackView extends FrameLayout {
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.StackView, 0, 0);
         swipe = (int) a.getDimension(R.styleable.StackView_swipe, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 67, displayMetrics));
-        margin = (int) a.getDimension(R.styleable.StackView_margin, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, displayMetrics));
-        padding = (int) a.getDimension(R.styleable.StackView_padding, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10, displayMetrics));
-        int radius = (int) a.getDimension(R.styleable.StackView_radius, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0, displayMetrics));
+        if (a.hasValue(R.styleable.StackView_margin)) {
+            int marg = (int) a.getDimension(R.styleable.StackView_margin, 0);
+            margin = new int[] {marg, marg, marg, marg};
+        } else {
+            margin = new int[] {
+                    (int) a.getDimension(R.styleable.StackView_marginLeft, 0),
+                    (int) a.getDimension(R.styleable.StackView_marginTop, 0),
+                    (int) a.getDimension(R.styleable.StackView_marginRight, 0),
+                    (int) a.getDimension(R.styleable.StackView_marginBottom, 0)
+            };
+        }
+        if (a.hasValue(R.styleable.StackView_padding)) {
+            int pad = (int) a.getDimension(R.styleable.StackView_padding, 0);
+            padding = new int[] {pad, pad, pad, pad};
+        } else {
+            padding = new int[] {
+                    (int) a.getDimension(R.styleable.StackView_paddingLeft, 0),
+                    (int) a.getDimension(R.styleable.StackView_paddingTop, 0),
+                    (int) a.getDimension(R.styleable.StackView_paddingRight, 0),
+                    (int) a.getDimension(R.styleable.StackView_paddingBottom, 0)
+            };
+        }
+        int radius = (int) a.getDimension(R.styleable.StackView_radius, 0);
 
         actionEnable = a.getBoolean(R.styleable.StackView_action_enable, true);
         int actionColor = a.getColor(R.styleable.StackView_action_color, DEFAULT_ACTION_COLOR);
@@ -110,7 +131,7 @@ public class StackView extends FrameLayout {
         tmp = new LinearLayout(context);
         tmp.setOrientation(LinearLayout.HORIZONTAL);
         LayoutParams tmpParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        tmpParams.setMargins(margin, margin, margin, margin);
+        tmpParams.setMargins(margin[0], margin[1], margin[2], margin[3]);
         tmp.setLayoutParams(tmpParams);
         tmp.setVisibility(INVISIBLE);
         addView(tmp);
@@ -127,9 +148,9 @@ public class StackView extends FrameLayout {
         back = new LinearLayout(context);
         back.setOrientation(LinearLayout.HORIZONTAL);
         LayoutParams backParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        backParams.setMargins(margin, margin, margin, margin);
+        backParams.setMargins(margin[0], margin[1], margin[2], margin[3]);
         back.setLayoutParams(backParams);
-        back.setPadding(padding, padding, padding, padding);
+        back.setPadding(padding[0], padding[1], padding[2], padding[3]);
         back.addView(backContent);
         addView(back);
 
@@ -146,7 +167,7 @@ public class StackView extends FrameLayout {
 
         frontContainer = new FrameLayout(context);
         frontContainer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin, margin, margin, margin);
+        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
 
         front = new LinearLayout(context);
         front.setOrientation(LinearLayout.HORIZONTAL);
@@ -195,9 +216,11 @@ public class StackView extends FrameLayout {
         removeDirectionAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
-                int value = (int) animation.getAnimatedValue();
-
-                back.setPadding(value, value, value, value);
+                back.setPadding(
+                        (int) animation.getAnimatedValue("left"),
+                        (int) animation.getAnimatedValue("top"),
+                        (int) animation.getAnimatedValue("right"),
+                        (int) animation.getAnimatedValue("bottom"));
                 back.requestLayout();
             }
         });
@@ -224,7 +247,7 @@ public class StackView extends FrameLayout {
 
         if (isInEditMode() && layout != -1) {
             View inflate = inflate(getContext(), layout, front);
-            ((MarginLayoutParams) inflate.getLayoutParams()).setMargins(margin, margin, margin, margin);
+            ((MarginLayoutParams) inflate.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
         }
     }
 
@@ -520,11 +543,14 @@ public class StackView extends FrameLayout {
         // remove compat padding if CardView (it could be the view or its first child)
         // and get card elevation
         int elevation = treatCardViewIfNecessary(view);
-        int backMargin = margin + elevation * 2;
-        ((MarginLayoutParams) back.getLayoutParams()).setMargins(backMargin, backMargin, backMargin, backMargin);
+        ((MarginLayoutParams) back.getLayoutParams()).setMargins(
+                margin[0] + elevation * 2,
+                margin[1] + elevation * 2,
+                margin[2] + elevation * 2,
+                margin[3] + elevation * 2);
         if (!backInit) {
             backInit = true;
-            back.setPadding(padding, padding - elevation, padding, padding);
+            back.setPadding(padding[0], padding[1] - elevation, padding[2], padding[3]);
         }
 
         backContentOnGlobalLayoutListener.init(view, elevation);
@@ -533,7 +559,7 @@ public class StackView extends FrameLayout {
 
     private void fillFront() {
         frontContent = adapter.createAndBindView(frontContainer, Adapter.Position.FIRST);
-        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin, margin, margin, margin);
+        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
         requestLayout();
 
         frontContainerOnTouchListener.init();
@@ -737,8 +763,13 @@ public class StackView extends FrameLayout {
         private final ValueAnimator animator;
         Direction direction;
 
-        RemoveDirectionAnimator(int padding, int animDuration) {
-            animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
+        RemoveDirectionAnimator(int[] padding, int animDuration) {
+            animator = ValueAnimator.ofPropertyValuesHolder(
+                    PropertyValuesHolder.ofInt("left", padding[0], 0),
+                    PropertyValuesHolder.ofInt("top", padding[1], 0),
+                    PropertyValuesHolder.ofInt("right", padding[2], 0),
+                    PropertyValuesHolder.ofInt("bottom", padding[3], 0)
+            ).setDuration(animDuration);
         }
 
         public void addListener(AnimatorListener listener) {
@@ -761,8 +792,8 @@ public class StackView extends FrameLayout {
         private final LinearLayout back;
         private final ImageView backContent;
 
-        private final int padding;
-        private final int margin;
+        private final int[] padding;
+        private final int[] margin;
         private final int animDuration;
         private final int swipe;
         private final boolean actionEnable;
@@ -809,13 +840,20 @@ public class StackView extends FrameLayout {
                     dY = frontContainer.getY() - event.getRawY();
 
                     if (backContent.getDrawable() != null) {
-                        ValueAnimator animator = ValueAnimator.ofInt(padding, 0).setDuration(animDuration);
+                        ValueAnimator animator = ValueAnimator.ofPropertyValuesHolder(
+                                PropertyValuesHolder.ofInt("left", padding[0], 0),
+                                PropertyValuesHolder.ofInt("top", padding[1], 0),
+                                PropertyValuesHolder.ofInt("right", padding[2], 0),
+                                PropertyValuesHolder.ofInt("bottom", padding[3], 0)
+                        ).setDuration(animDuration);
                         animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                             @Override
                             public void onAnimationUpdate(ValueAnimator animation) {
-                                int value = (int) animation.getAnimatedValue();
-
-                                back.setPadding(value, value, value, value);
+                                back.setPadding(
+                                        (int) animation.getAnimatedValue("left"),
+                                        (int) animation.getAnimatedValue("top"),
+                                        (int) animation.getAnimatedValue("right"),
+                                        (int) animation.getAnimatedValue("bottom"));
                                 back.requestLayout();
                             }
                         });
@@ -836,17 +874,25 @@ public class StackView extends FrameLayout {
                         self.remove(nx, m * nx + p, animDuration);
                     } else {
                         frontContainer.animate()
-                                .x(initPadding[0] + initX + margin)
-                                .y(initPadding[1] + initY + margin)
+                                .x(initPadding[0] + initX + margin[0])
+                                .y(initPadding[1] + initY + margin[1])
                                 .setDuration(animDuration / 2)
                                 .start();
                         if (backContent.getDrawable() != null) {
-                            ValueAnimator animator = ValueAnimator.ofInt(0, padding).setDuration(animDuration);
+                            ValueAnimator animator = ValueAnimator.ofPropertyValuesHolder(
+                                    PropertyValuesHolder.ofInt("left", 0, padding[0]),
+                                    PropertyValuesHolder.ofInt("top", 0, padding[1]),
+                                    PropertyValuesHolder.ofInt("right", 0, padding[2]),
+                                    PropertyValuesHolder.ofInt("bottom", 0, padding[3])
+                            ).setDuration(animDuration);
                             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                                 @Override
                                 public void onAnimationUpdate(ValueAnimator animation) {
-                                    int value = (int) animation.getAnimatedValue();
-                                    back.setPadding(value, value, value, value);
+                                    back.setPadding(
+                                            (int) animation.getAnimatedValue("left"),
+                                            (int) animation.getAnimatedValue("top"),
+                                            (int) animation.getAnimatedValue("right"),
+                                            (int) animation.getAnimatedValue("bottom"));
                                     back.requestLayout();
                                 }
                             });
@@ -886,8 +932,8 @@ public class StackView extends FrameLayout {
     private static class AnimatorListenerHelper implements Animator.AnimatorListener {
         private final StackView self;
 
-        private final int padding;
-        private final int margin;
+        private final int[] padding;
+        private final int[] margin;
         private final int[] initPadding;
 
         private final FrameLayout frontContainer;
@@ -903,7 +949,7 @@ public class StackView extends FrameLayout {
         private AnimatorListenerHelper(
                 StackView stackView, FrameLayout frontContainer,
                 LinearLayout back, LinearLayout empty,
-                int padding, int margin, int[] initPadding) {
+                int[] padding, int[] margin, int[] initPadding) {
             this.self = stackView;
             this.frontContainer = frontContainer;
             this.back = back;
@@ -933,8 +979,8 @@ public class StackView extends FrameLayout {
                 switch (adapter.getItemCount()) {
                     case 0: {
                         frontContainer.setVisibility(GONE);
-                        frontContainer.setX(initPadding[0] + initX + margin);
-                        frontContainer.setY(initPadding[1] + initY + margin);
+                        frontContainer.setX(initPadding[0] + initX + margin[0]);
+                        frontContainer.setY(initPadding[1] + initY + margin[1]);
 
                         View view = adapter.createAndBindEmptyView(empty);
                         if (view != null) {
@@ -946,12 +992,12 @@ public class StackView extends FrameLayout {
                     default: {
                         back.setVisibility(VISIBLE);
                         self.fillBack();
-                        back.setPadding(padding, padding, padding, padding);
+                        back.setPadding(padding[0], padding[1], padding[2], padding[3]);
                     }
                     case 1: {
                         self.fillFront();
-                        frontContainer.setX(initPadding[0] + initX + margin);
-                        frontContainer.setY(initPadding[1] + initY + margin);
+                        frontContainer.setX(initPadding[0] + initX + margin[0]);
+                        frontContainer.setY(initPadding[1] + initY + margin[1]);
                         break;
                     }
                 }

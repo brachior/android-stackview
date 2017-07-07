@@ -3,8 +3,19 @@
 
     <declare-styleable name="StackView">
         <attr name="swipe" format="dimension" />
+
         <attr name="padding" format="dimension" />
+        <attr name="paddingTop" format="dimension" />
+        <attr name="paddingLeft" format="dimension" />
+        <attr name="paddingRight" format="dimension" />
+        <attr name="paddingBottom" format="dimension" />
+
         <attr name="margin" format="dimension" />
+        <attr name="marginTop" format="dimension" />
+        <attr name="marginLeft" format="dimension" />
+        <attr name="marginRight" format="dimension" />
+        <attr name="marginBottom" format="dimension" />
+
         <attr name="radius" format="dimension" />
 
         <attr name="action_enable" format="boolean" />
