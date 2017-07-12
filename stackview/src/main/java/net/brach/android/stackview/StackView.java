@@ -5,21 +5,14 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.content.Context;
-import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Rect;
-import android.graphics.RectF;
-import android.graphics.drawable.ShapeDrawable;
-import android.graphics.drawable.shapes.RoundRectShape;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.v4.graphics.drawable.RoundedBitmapDrawable;
-import android.support.v4.graphics.drawable.RoundedBitmapDrawableFactory;
+import android.support.v7.widget.CardView;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
@@ -31,48 +24,46 @@ import android.view.ViewPropertyAnimator;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StackView extends FrameLayout {
-    private static final int SHADOW_CARD_COLOR = Color.parseColor("#90b1b1b1");
     private static final int DEFAULT_ACTION_COLOR = Color.BLACK;
 
     private final int[] padding;
     private final int[] margin;
+    private final float elevation;
     private final int animDuration;
     private final int swipe;
     private final boolean actionEnable;
     private final int[] initPadding;
 
-    private final LinearLayout front;
-    private final FrameLayout frontContainer;
+    private FrameLayout front;
+    private CardView frontContainer;
     private View frontContent;
-    private final RelativeLayout frontAction;
+    private RelativeLayout frontAction;
 
-    private final LinearLayout back;
-    private final ImageView backContent;
+    private FrameLayout back;
+    private CardView backContainer;
+    private ImageView backContent;
     private boolean backInit;
 
-    private final LinearLayout empty;
-    private final LinearLayout tmp;
+    private FrameLayout empty;
+    private CardView tmp;
 
     private float initX = -1;
     private float initY = -1;
     private Adapter adapter;
 
-    private final ValueAnimator addActionAnim;
-    private final ValueAnimator removeActionAnim;
-    private final RemoveDirectionAnimator removeDirectionAnim;
+    private ValueAnimator addActionAnim;
+    private ValueAnimator removeActionAnim;
+    private RemoveDirectionAnimator removeDirectionAnim;
 
-    private final FrontContainerOnTouchListener frontContainerOnTouchListener;
-    private final BackContentOnGlobalLayoutListener backContentOnGlobalLayoutListener;
-    private final AnimatorListenerHelper removeAnimatorListener;
+    private FrontContainerOnTouchListener frontContainerOnTouchListener;
+    private BackContentOnGlobalLayoutListener backContentOnGlobalLayoutListener;
+    private AnimatorListenerHelper removeAnimatorListener;
 
     public StackView(Context context) {
         this(context, null);
@@ -110,7 +101,12 @@ public class StackView extends FrameLayout {
                     (int) a.getDimension(R.styleable.StackView_paddingBottom, 0)
             };
         }
-        int radius = (int) a.getDimension(R.styleable.StackView_radius, 0);
+
+        // card information
+        elevation = a.getDimension(R.styleable.StackView_card_elevation, 0);
+        int color = a.getColor(R.styleable.StackView_card_backgroundColor, Color.WHITE);
+        float radius = a.getDimension(R.styleable.StackView_card_cornerRadius, 0);
+        boolean compatPadding = a.getBoolean(R.styleable.StackView_card_useCompatPadding, false);
 
         actionEnable = a.getBoolean(R.styleable.StackView_action_enable, true);
         int actionColor = a.getColor(R.styleable.StackView_action_color, DEFAULT_ACTION_COLOR);
@@ -124,40 +120,59 @@ public class StackView extends FrameLayout {
         a.recycle();
 
         initPadding = new int[] {getPaddingLeft(), getPaddingTop(), getPaddingRight(), getPaddingBottom()};
-        float border = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2, displayMetrics);
 
-        removeAllViews();
+        // view configurations
+        initViews(context, color, radius, compatPadding, actionColor, actionText, actionAppearance);
 
-        tmp = new LinearLayout(context);
-        tmp.setOrientation(LinearLayout.HORIZONTAL);
-        LayoutParams tmpParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        tmpParams.setMargins(margin[0], margin[1], margin[2], margin[3]);
-        tmp.setLayoutParams(tmpParams);
+        // animation listeners
+        initAnimationListeners(actionAnimDuration);
+
+        if (isInEditMode() && layout != -1) {
+            View inflate = inflate(getContext(), layout, frontContainer);
+            ((MarginLayoutParams) inflate.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
+        }
+    }
+
+    private void initViews(Context context, int color, float radius, boolean compatPadding, int actionColor, String actionText, int actionAppearance) {
+        // tmp
+        tmp = initCardView(context, color, elevation, radius, compatPadding);
         tmp.setVisibility(INVISIBLE);
+        ((MarginLayoutParams) tmp.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
         addView(tmp);
 
-        empty = new LinearLayout(context);
-        empty.setOrientation(LinearLayout.HORIZONTAL);
-        empty.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // empty
+        empty = new FrameLayout(context);
+        empty.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         empty.setVisibility(GONE);
         addView(empty);
 
-        backContent = new ImageView(context);
-        backContent.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        back = new LinearLayout(context);
-        back.setOrientation(LinearLayout.HORIZONTAL);
-        LayoutParams backParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        backParams.setMargins(margin[0], margin[1], margin[2], margin[3]);
-        back.setLayoutParams(backParams);
-        back.setPadding(padding[0], padding[1], padding[2], padding[3]);
-        back.addView(backContent);
+        // back
+        back = new FrameLayout(context);
+        back.setLayoutParams(new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
         addView(back);
+
+        backContainer = initCardView(context, color, 0, radius, compatPadding);
+        back.addView(backContainer);
+
+        backContent = new ImageView(context);
+        backContent.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        backContent.setScaleType(ImageView.ScaleType.FIT_XY);
+        backContent.setAdjustViewBounds(true);
+        backContainer.addView(backContent);
+
+        // front
+        front = new FrameLayout(context);
+        front.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        addView(front);
+
+        frontContainer = initCardView(context, color, elevation, radius, compatPadding);
+        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
+        front.addView(frontContainer);
 
         frontAction = new RelativeLayout(context);
         frontAction.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         frontAction.setGravity(Gravity.CENTER);
-        makeAndSetOverlay(frontAction, actionColor, radius);
+        frontAction.setBackgroundColor(actionColor);
 
         TextView frontActionText = new TextView(context);
         frontActionText.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -165,18 +180,10 @@ public class StackView extends FrameLayout {
         setTextAppearance(context, frontActionText, actionAppearance);
         frontAction.addView(frontActionText);
 
-        frontContainer = new FrameLayout(context);
-        frontContainer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
+        requestLayout();
+    }
 
-        front = new LinearLayout(context);
-        front.setOrientation(LinearLayout.HORIZONTAL);
-        LayoutParams frontParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        front.setLayoutParams(frontParams);
-        front.addView(frontContainer);
-        addView(front);
-
-        // animation listeners
+    private void initAnimationListeners(int actionAnimDuration) {
         addActionAnim = ValueAnimator.ofFloat(0.f, 1.f);
         addActionAnim.setDuration(actionAnimDuration);
         addActionAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
@@ -240,15 +247,9 @@ public class StackView extends FrameLayout {
 
         frontContainerOnTouchListener = new FrontContainerOnTouchListener(this);
 
-        backContentOnGlobalLayoutListener = new BackContentOnGlobalLayoutListener(
-                getResources(), back, backContent, radius, border);
+        backContentOnGlobalLayoutListener = new BackContentOnGlobalLayoutListener(back, backContent);
 
         removeAnimatorListener = new AnimatorListenerHelper(this, frontContainer, back, empty, padding, margin, initPadding);
-
-        if (isInEditMode() && layout != -1) {
-            View inflate = inflate(getContext(), layout, front);
-            ((MarginLayoutParams) inflate.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
-        }
     }
 
     public void setAdapter(final Adapter adapter) {
@@ -304,6 +305,10 @@ public class StackView extends FrameLayout {
          */
         public View createAndBindEmptyView(ViewGroup parent) {
             return null;
+        }
+
+        public View getEmptyView() {
+            return stackView != null ? stackView.empty.getChildAt(0) : null;
         }
 
         /**
@@ -540,20 +545,8 @@ public class StackView extends FrameLayout {
 
     private void fillBack() {
         View view = adapter.createAndBindView(tmp, Adapter.Position.SECOND);
-        // remove compat padding if CardView (it could be the view or its first child)
-        // and get card elevation
-        int elevation = treatCardViewIfNecessary(view);
-        ((MarginLayoutParams) back.getLayoutParams()).setMargins(
-                margin[0] + elevation * 2,
-                margin[1] + elevation * 2,
-                margin[2] + elevation * 2,
-                margin[3] + elevation * 2);
-        if (!backInit) {
-            backInit = true;
-            back.setPadding(padding[0], padding[1] - elevation, padding[2], padding[3]);
-        }
 
-        backContentOnGlobalLayoutListener.init(view, elevation);
+        backContentOnGlobalLayoutListener.init(view);
         addOnGlobalLayoutListener(view, backContentOnGlobalLayoutListener);
     }
 
@@ -561,6 +554,32 @@ public class StackView extends FrameLayout {
         frontContent = adapter.createAndBindView(frontContainer, Adapter.Position.FIRST);
         ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
         requestLayout();
+
+        if (!backInit) {
+            backInit = true;
+            addOnGlobalLayoutListener(frontContainer, new ViewTreeObserver.OnGlobalLayoutListener() {
+                @Override
+                public void onGlobalLayout() {
+                    removeOnGlobalLayoutListener(frontContainer, this);
+
+                    int width = frontContainer.getWidth();
+                    int height = frontContainer.getHeight();
+
+                    frontContainer.setLayoutParams(new FrameLayout.LayoutParams(width, height));
+                    frontAction.setLayoutParams(new FrameLayout.LayoutParams(width, height));
+                    tmp.setLayoutParams(new FrameLayout.LayoutParams(width, height));
+                    back.setLayoutParams(new FrameLayout.LayoutParams(width, height));
+
+                    ((MarginLayoutParams) frontContainer.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
+                    ((MarginLayoutParams) back.getLayoutParams()).setMargins(margin[0], margin[1], margin[2], margin[3]);
+
+                    frontContainer.requestLayout();
+                    frontAction.requestLayout();
+                    tmp.requestLayout();
+                    back.requestLayout();
+                }
+            });
+        }
 
         frontContainerOnTouchListener.init();
         frontContainer.setOnTouchListener(frontContainerOnTouchListener);
@@ -580,6 +599,18 @@ public class StackView extends FrameLayout {
         removeAnimatorListener.init(adapter);
         animator.setListener(removeAnimatorListener);
         animator.start();
+    }
+
+    private CardView initCardView(Context ctx, int color, float elevation, float radius, boolean compatPadding) {
+        CardView card = new CardView(ctx);
+        card.setLayoutParams(new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+
+        card.setCardElevation(elevation);
+        card.setCardBackgroundColor(color);
+        card.setRadius(radius);
+        card.setUseCompatPadding(compatPadding);
+
+        return card;
     }
 
     private static void addOnGlobalLayoutListener(View view, ViewTreeObserver.OnGlobalLayoutListener listener) {
@@ -610,8 +641,6 @@ public class StackView extends FrameLayout {
             frontAction.setAlpha(0.f);
             frontContainer.addView(frontAction);
 
-            int elevation = getCardViewElevation(frontContent);
-            ((MarginLayoutParams) frontAction.getLayoutParams()).setMargins(elevation, elevation * 2, elevation, elevation * 2);
             addActionAnim.start();
         }
     }
@@ -625,108 +654,24 @@ public class StackView extends FrameLayout {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    private void makeAndSetOverlay(View view, int color, int radius) {
-        ShapeDrawable actionDrawable = new ShapeDrawable(new RoundRectShape(
-                new float[] { radius, radius, radius, radius, radius, radius, radius, radius }, null, null));
-        actionDrawable.getPaint().setColor(color);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-            view.setBackground(actionDrawable);
-        } else {
-            view.setBackgroundDrawable(actionDrawable);
-        }
-    }
-
-    private int treatCardViewIfNecessary(View view) {
-        if (view instanceof ViewGroup) {
-            if (!removeCompatPadding(view)) {
-                View child = ((ViewGroup) view).getChildAt(0);
-                if (removeCompatPadding(child)) {
-                    return (int) getElevation(child);
-                }
-            } else {
-                return (int) getElevation(view);
-            }
-        }
-        return 0;
-    }
-
-    private int getCardViewElevation(View view) {
-        if (view instanceof ViewGroup) {
-            int elevation = (int) getElevation(view);
-            if (elevation == 0) {
-                View child = ((ViewGroup) view).getChildAt(0);
-                return (int) getElevation(child);
-            } else {
-                return elevation;
-            }
-        }
-        return 0;
-    }
-
-    private static boolean removeCompatPadding(View view) {
-        try {
-            Method padding = view.getClass().getDeclaredMethod("setUseCompatPadding", boolean.class);
-            padding.setAccessible(true);
-            try {
-                padding.invoke(view, false);
-                return true;
-            } catch (InvocationTargetException ignored) {
-            } catch (IllegalAccessException ignored) {
-            } finally {
-                padding.setAccessible(false);
-            }
-        } catch (NoSuchMethodException ignored) {
-        }
-        return false;
-    }
-
-    private static float getElevation(View view) {
-        try {
-            Method elevation = view.getClass().getDeclaredMethod("getCardElevation");
-            elevation.setAccessible(true);
-            try {
-                return (float) elevation.invoke(view);
-            } catch (InvocationTargetException ignored) {
-            } catch (IllegalAccessException ignored) {
-            } finally {
-                elevation.setAccessible(false);
-            }
-        } catch (NoSuchMethodException ignored) {
-        }
-        return .0f;
-    }
-
     /***************/
     /** listeners **/
     /***************/
 
     private static class BackContentOnGlobalLayoutListener
             implements ViewTreeObserver.OnGlobalLayoutListener {
-        private final int radius;
-        private final float border;
-
-        private final Resources resources;
-        private final LinearLayout back;
+        private final FrameLayout back;
         private final ImageView backContent;
 
         private View view;
-        private int elevation;
 
-        private BackContentOnGlobalLayoutListener(
-                Resources resources, LinearLayout back, ImageView backContent,
-                int radius, float border) {
-            this.resources = resources;
-
+        private BackContentOnGlobalLayoutListener(FrameLayout back, ImageView backContent) {
             this.back = back;
             this.backContent = backContent;
-            this.radius = radius;
-            this.border = border;
         }
 
-        void init(View view, int elevation) {
+        void init(View view) {
             this.view = view;
-            this.elevation = elevation;
         }
 
         @Override
@@ -734,26 +679,11 @@ public class StackView extends FrameLayout {
             removeOnGlobalLayoutListener(view, this);
 
             if (view.getWidth() != 0 && view.getHeight() != 0) {
-                backContent.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, view.getHeight() - elevation * 2));
-                Bitmap bitmap = Bitmap.createBitmap(view.getWidth() - elevation * 2, view.getHeight() - elevation * 2, Bitmap.Config.ARGB_8888);
+                Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
                 Canvas canvas = new Canvas(bitmap);
                 view.draw(canvas);
 
-                if (elevation > 0) {
-                    // draw border
-                    final Paint paint = new Paint();
-                    final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-                    final RectF rectF = new RectF(rect);
-                    paint.setColor(SHADOW_CARD_COLOR);
-                    paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(border);
-                    canvas.drawRoundRect(rectF, radius, radius, paint);
-                }
-
-                RoundedBitmapDrawable dr = RoundedBitmapDrawableFactory.create(resources, bitmap);
-                dr.setCornerRadius(radius);
-
-                backContent.setImageDrawable(dr);
+                backContent.setImageBitmap(bitmap);
                 back.requestLayout();
             }
         }
@@ -787,13 +717,15 @@ public class StackView extends FrameLayout {
 
     private static class FrontContainerOnTouchListener implements OnTouchListener {
         private final StackView self;
-        private final LinearLayout front;
-        private final FrameLayout frontContainer;
-        private final LinearLayout back;
+        private final FrameLayout front;
+        private final CardView frontContainer;
+        private final FrameLayout back;
+        private final CardView backContainer;
         private final ImageView backContent;
 
         private final int[] padding;
         private final int[] margin;
+        private final float elevation;
         private final int animDuration;
         private final int swipe;
         private final boolean actionEnable;
@@ -809,9 +741,11 @@ public class StackView extends FrameLayout {
             this.front = self.front;
             this.frontContainer = self.frontContainer;
             this.back = self.back;
+            this.backContainer = self.backContainer;
             this.backContent = self.backContent;
 
             this.padding = self.padding;
+            this.elevation = self.elevation;
             this.margin = self.margin;
             this.animDuration = self.animDuration;
             this.swipe = self.swipe;
@@ -844,7 +778,8 @@ public class StackView extends FrameLayout {
                                 PropertyValuesHolder.ofInt("left", padding[0], 0),
                                 PropertyValuesHolder.ofInt("top", padding[1], 0),
                                 PropertyValuesHolder.ofInt("right", padding[2], 0),
-                                PropertyValuesHolder.ofInt("bottom", padding[3], 0)
+                                PropertyValuesHolder.ofInt("bottom", padding[3], 0),
+                                PropertyValuesHolder.ofFloat("elevation", 0, elevation)
                         ).setDuration(animDuration);
                         animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                             @Override
@@ -854,6 +789,7 @@ public class StackView extends FrameLayout {
                                         (int) animation.getAnimatedValue("top"),
                                         (int) animation.getAnimatedValue("right"),
                                         (int) animation.getAnimatedValue("bottom"));
+                                backContainer.setCardElevation((float) animation.getAnimatedValue("elevation"));
                                 back.requestLayout();
                             }
                         });
@@ -883,7 +819,8 @@ public class StackView extends FrameLayout {
                                     PropertyValuesHolder.ofInt("left", 0, padding[0]),
                                     PropertyValuesHolder.ofInt("top", 0, padding[1]),
                                     PropertyValuesHolder.ofInt("right", 0, padding[2]),
-                                    PropertyValuesHolder.ofInt("bottom", 0, padding[3])
+                                    PropertyValuesHolder.ofInt("bottom", 0, padding[3]),
+                                    PropertyValuesHolder.ofFloat("elevation", elevation, 0)
                             ).setDuration(animDuration);
                             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                                 @Override
@@ -893,6 +830,7 @@ public class StackView extends FrameLayout {
                                             (int) animation.getAnimatedValue("top"),
                                             (int) animation.getAnimatedValue("right"),
                                             (int) animation.getAnimatedValue("bottom"));
+                                    backContainer.setCardElevation((float) animation.getAnimatedValue("elevation"));
                                     back.requestLayout();
                                 }
                             });
@@ -936,9 +874,9 @@ public class StackView extends FrameLayout {
         private final int[] margin;
         private final int[] initPadding;
 
-        private final FrameLayout frontContainer;
-        private final LinearLayout back;
-        private final LinearLayout empty;
+        private final CardView frontContainer;
+        private final FrameLayout back;
+        private final FrameLayout empty;
 
         private float initX;
         private float initY;
@@ -947,8 +885,8 @@ public class StackView extends FrameLayout {
         private boolean done = false;
 
         private AnimatorListenerHelper(
-                StackView stackView, FrameLayout frontContainer,
-                LinearLayout back, LinearLayout empty,
+                StackView stackView, CardView frontContainer,
+                FrameLayout back, FrameLayout empty,
                 int[] padding, int[] margin, int[] initPadding) {
             this.self = stackView;
             this.frontContainer = frontContainer;

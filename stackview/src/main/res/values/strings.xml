@@ -16,7 +16,10 @@
         <attr name="marginRight" format="dimension" />
         <attr name="marginBottom" format="dimension" />
 
-        <attr name="radius" format="dimension" />
+        <attr name="card_useCompatPadding" format="boolean" />
+        <attr name="card_backgroundColor" format="color" />
+        <attr name="card_cornerRadius" format="dimension" />
+        <attr name="card_elevation" format="dimension" />
 
         <attr name="action_enable" format="boolean" />
         <attr name="action_color" format="color" />
